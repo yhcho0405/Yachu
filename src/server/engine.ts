@@ -10,7 +10,9 @@ import { RULES_VERSION } from '../shared/rules';
 import { GameError, type EngineClock } from './errors';
 import * as yacht from './games/yacht';
 import * as tikatuka from './games/tikatuka';
+import * as avalon from './games/avalon';
 import type { TikatukaRoomState } from '../shared/tikatuka';
+import type { AvalonAbortReason, AvalonInternalState } from '../shared/avalon';
 export { GameError, type EngineClock } from './errors';
 export { ROLL_SETTLE_MS } from './games/yacht';
 
@@ -23,10 +25,19 @@ export interface Member {
   graceRemaining: number;
   departed: boolean;
 }
-export interface StoredRoom<R extends RoomState = RoomState> {
+/** The full Avalon state stays inside server storage; it is never a ServerMessage. */
+export type InternalRoomState = YachtRoomState | TikatukaRoomState | AvalonInternalState;
+export interface StoredRoom<R extends InternalRoomState = InternalRoomState> {
   state: R;
   members: Record<string, Member>;
 }
+export function newRoom(
+  roomId: string,
+  code: string,
+  now: number,
+  uuid: () => string,
+  gameType: 'avalon',
+): StoredRoom<AvalonInternalState>;
 export function newRoom(
   roomId: string,
   code: string,
@@ -63,12 +74,13 @@ export function newRoom(
 ): StoredRoom {
   const base: RoomBase<GameType, never> = {
     schemaVersion: 2,
-    protocolVersion: 2,
+    protocolVersion: gameType === 'avalon' ? 3 : 2,
     gameType,
     roomId,
     code,
     gameId: uuid(),
-    rulesVersion: gameType === 'yacht' ? RULES_VERSION : 'tikatuka-v1',
+    rulesVersion:
+      gameType === 'yacht' ? RULES_VERSION : gameType === 'tikatuka' ? 'tikatuka-v1' : 'avalon-v1',
     phase: 'lobby',
     version: 0,
     presenceVersion: 0,
@@ -86,7 +98,9 @@ export function newRoom(
     state:
       gameType === 'yacht'
         ? yacht.createState({ ...base, gameType })
-        : tikatuka.createState({ ...base, gameType }),
+        : gameType === 'tikatuka'
+          ? tikatuka.createState({ ...base, gameType })
+          : avalon.createState({ ...base, gameType }),
   };
 }
 function touch(room: StoredRoom, now: number): void {
@@ -125,7 +139,11 @@ export function joinRoom(
   if (room.state.players.length >= maximum)
     throw new GameError(
       'ROOM_FULL',
-      maximum === 4 ? '방에 이미 네 명이 있습니다.' : '방에 이미 두 명이 있습니다.',
+      maximum === 4
+        ? '방에 이미 네 명이 있습니다.'
+        : maximum === 2
+          ? '방에 이미 두 명이 있습니다.'
+          : `방에 이미 ${maximum}명이 있습니다.`,
     );
   const used = new Set(room.state.players.map((player) => player.seat));
   const seat = Array.from({ length: maximum }, (_, i) => i).find((value) => !used.has(value))!;
@@ -147,7 +165,8 @@ export function joinRoom(
     graceDeadline: now + GRACE_MS,
   };
   if (room.state.gameType === 'yacht') room.state.players.push(yacht.createPlayer(base));
-  else room.state.players.push(tikatuka.createPlayer(base));
+  else if (room.state.gameType === 'tikatuka') room.state.players.push(tikatuka.createPlayer(base));
+  else room.state.players.push(base);
   room.state.players.sort((a, b) => a.seat - b.seat);
   if (!room.state.hostId) room.state.hostId = playerId;
   touch(room, now);
@@ -190,7 +209,13 @@ function scheduleAI(room: StoredRoom, now: number): void {
       ? Math.max(now + 850, state.inputAfter)
       : null;
 }
-export function depart(room: StoredRoom, playerId: string, now: number, uuid: () => string): void {
+export function depart(
+  room: StoredRoom,
+  playerId: string,
+  now: number,
+  uuid: () => string,
+  abortReason: AvalonAbortReason = 'player_left',
+): void {
   const p = room.state.players.find((player) => player.id === playerId);
   const auth = room.members[playerId];
   if (!p || !auth || auth.departed) return;
@@ -201,7 +226,7 @@ export function depart(room: StoredRoom, playerId: string, now: number, uuid: ()
       room.state.players = room.state.players.filter((player) => player.id !== playerId);
     else room.state.players = room.state.players.filter((player) => player.id !== playerId);
   } else if (room.state.phase === 'playing') {
-    p.forfeited = true;
+    if (room.state.gameType !== 'avalon') p.forfeited = true;
     const clock = {
       now,
       uuid,
@@ -210,7 +235,8 @@ export function depart(room: StoredRoom, playerId: string, now: number, uuid: ()
       },
     };
     if (room.state.gameType === 'yacht') yacht.forfeit(room.state, playerId, clock);
-    else tikatuka.forfeit(room.state, playerId, clock);
+    else if (room.state.gameType === 'tikatuka') tikatuka.forfeit(room.state, playerId, clock);
+    else avalon.abort(room.state, abortReason, clock);
   }
   handoff(room);
   scheduleAI(room, now);
@@ -227,7 +253,7 @@ export function expireGrace(room: StoredRoom, now: number, uuid: () => string): 
   let changed = false;
   for (const p of [...room.state.players])
     if (p.kind === 'human' && !p.connected && p.graceDeadline !== null && p.graceDeadline <= now) {
-      depart(room, p.id, now, uuid);
+      depart(room, p.id, now, uuid, 'disconnected');
       changed = true;
     }
   return changed;
@@ -265,21 +291,31 @@ export function disconnect(
   room.state.presenceVersion++;
   return true;
 }
-export function assertGameCommand(state: RoomState, command: Command): void {
+export function assertGameCommand(state: InternalRoomState, command: Command): void {
   if (command.protocolVersion === undefined) {
-    if (state.gameType !== 'yacht' || command.type.startsWith('tika_'))
+    if (
+      state.gameType !== 'yacht' ||
+      command.type.startsWith('tika_') ||
+      command.type.startsWith('av_')
+    )
       throw new GameError(
         'PROTOCOL_REFRESH',
         '경기와 좌석은 유지됩니다. 새로고침 후 계속해 주세요.',
       );
-  } else if (command.protocolVersion !== 2) {
+  } else if (command.protocolVersion !== 2 && command.protocolVersion !== 3) {
     throw new GameError('PROTOCOL_REFRESH', '경기와 좌석은 유지됩니다. 새로고침 후 계속해 주세요.');
   } else if (command.gameType !== state.gameType) {
     throw new GameError('WRONG_GAME_TYPE', '이 방에서 사용할 수 없는 게임 동작입니다.');
   }
+  if (state.gameType === 'avalon' && command.protocolVersion !== 3)
+    throw new GameError('PROTOCOL_REFRESH', '경기와 좌석은 유지됩니다. 새로고침 후 계속해 주세요.');
   if (
-    (state.gameType === 'yacht' && command.type.startsWith('tika_')) ||
-    (state.gameType === 'tikatuka' && ['roll', 'hold', 'score'].includes(command.type))
+    (state.gameType === 'yacht' &&
+      (command.type.startsWith('tika_') || command.type.startsWith('av_'))) ||
+    (state.gameType === 'tikatuka' &&
+      (['roll', 'hold', 'score'].includes(command.type) || command.type.startsWith('av_'))) ||
+    (state.gameType === 'avalon' &&
+      (['roll', 'hold', 'score'].includes(command.type) || command.type.startsWith('tika_')))
   )
     throw new GameError('WRONG_GAME_TYPE', '이 방에서 사용할 수 없는 게임 동작입니다.');
 }
@@ -296,8 +332,19 @@ export function applyCommand(
   assertGameCommand(state, command);
   if (command.gameId !== state.gameId)
     throw new GameError('GAME_CHANGED', '경기가 바뀌었습니다. 최신 화면을 확인해 주세요.');
-  if (command.expectedVersion !== state.version)
+  // Simultaneous Avalon submissions are scoped to the phase/proposal, not unrelated
+  // submissions, presence or chat revisions. The game adapter validates that scope.
+  if (command.expectedVersion !== state.version && state.gameType !== 'avalon')
     throw new GameError('STALE_VERSION', '다른 변경이 먼저 반영되었습니다. 다시 선택해 주세요.');
+  if (
+    state.gameType === 'avalon' &&
+    ['ready', 'start', 'rematch'].includes(command.type) &&
+    command.turnId !== state.phaseId
+  )
+    throw new GameError(
+      'TURN_CHANGED',
+      '설정이나 진행 단계가 바뀌었습니다. 최신 내용을 확인해 주세요.',
+    );
   if (command.type === 'leave') {
     depart(room, playerId, clock.now, clock.uuid);
     return;
@@ -320,7 +367,8 @@ export function applyCommand(
     for (const player of state.players)
       if (player.kind === 'human') room.members[player.id]!.graceRemaining = GRACE_MS;
     if (state.gameType === 'yacht') yacht.start(state, clock);
-    else tikatuka.start(state, clock);
+    else if (state.gameType === 'tikatuka') tikatuka.start(state, clock);
+    else avalon.start(state, clock);
   } else if (command.type === 'rematch') {
     if (state.phase !== 'finished')
       throw new GameError('NOT_FINISHED', '경기가 끝난 뒤 다시 시작할 수 있습니다.');
@@ -346,7 +394,15 @@ export function applyCommand(
     state.turnId = clock.uuid();
     state.phase = 'lobby';
     if (state.gameType === 'yacht') yacht.reset(state);
-    else tikatuka.reset(state);
+    else if (state.gameType === 'tikatuka') tikatuka.reset(state);
+    else avalon.reset(state);
+  } else if (
+    state.gameType === 'avalon' &&
+    command.gameType === 'avalon' &&
+    command.type.startsWith('av_')
+  ) {
+    // Avalon owns its leader/simultaneous/quest/lady/assassin authority checks.
+    avalon.applyIntent(state, playerId, command, clock);
   } else {
     if (state.phase !== 'playing') throw new GameError('NOT_PLAYING', '진행 중인 경기가 아닙니다.');
     const actor =
@@ -362,17 +418,16 @@ export function applyCommand(
       (command.type === 'roll' || command.type === 'hold' || command.type === 'score')
     )
       yacht.applyIntent(state, playerId, command, clock);
-    else if (
-      state.gameType === 'tikatuka' &&
-      command.type !== 'roll' &&
-      command.type !== 'hold' &&
-      command.type !== 'score'
-    )
+    else if (state.gameType === 'tikatuka' && command.gameType === 'tikatuka')
       tikatuka.applyIntent(state, playerId, command, clock);
     else throw new GameError('WRONG_GAME_TYPE', '이 방에서 사용할 수 없는 게임 동작입니다.');
   }
   scheduleAI(room, clock.now);
   touch(room, clock.now);
+}
+/** Every network path must project independently for its authenticated recipient. */
+export function recipientState(room: StoredRoom, playerId: string): RoomState {
+  return room.state.gameType === 'avalon' ? avalon.projectAvalon(room.state, playerId) : room.state;
 }
 /** Called only inside RoomStore's synchronous alarm transaction. */
 export function applyComputerTurn(room: StoredRoom, clock: EngineClock): boolean {

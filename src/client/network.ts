@@ -135,7 +135,7 @@ export class GameClient {
   private compatible(state: RoomState): boolean {
     if (
       isGameType(state.gameType) &&
-      state.protocolVersion === PROTOCOL_VERSION &&
+      state.protocolVersion === (state.gameType === 'avalon' ? PROTOCOL_VERSION : 2) &&
       state.schemaVersion === SCHEMA_VERSION
     )
       return true;
@@ -409,8 +409,12 @@ export class GameClient {
           entry.intent.type,
         );
         const wrongGame = entry.gameType !== undefined && entry.gameType !== state.gameType;
-        const wrongAction =
-          gameAction && entry.intent.type.startsWith('tika_') !== (state.gameType === 'tikatuka');
+        const actionGame = entry.intent.type.startsWith('tika_')
+          ? 'tikatuka'
+          : entry.intent.type.startsWith('av_')
+            ? 'avalon'
+            : 'yacht';
+        const wrongAction = gameAction && actionGame !== state.gameType;
         if (!entry.command && (wrongGame || wrongAction)) {
           this.queue.shift();
           this.persist();
@@ -420,9 +424,17 @@ export class GameClient {
         // An unsent intent cannot cross a turn or a rematch. An already sent request must be resolved with its original ID.
         if (
           !entry.command &&
-          ((['roll', 'hold', 'score'] as string[]).includes(entry.intent.type) ||
+          ((((['roll', 'hold', 'score'] as string[]).includes(entry.intent.type) ||
             entry.intent.type.startsWith('tika_')) &&
-          (entry.gameId !== state.gameId || entry.turnId !== state.turnId)
+            (entry.gameId !== state.gameId || entry.turnId !== state.turnId)) ||
+            (entry.intent.type.startsWith('av_') &&
+              (entry.gameId !== state.gameId ||
+                ('phaseId' in entry.intent &&
+                  state.gameType === 'avalon' &&
+                  entry.intent.phaseId !== state.phaseId))) ||
+            (state.gameType === 'avalon' &&
+              ['ready', 'start', 'rematch'].includes(entry.intent.type) &&
+              (entry.gameId !== state.gameId || entry.turnId !== state.phaseId)))
         ) {
           this.queue.shift();
           this.persist();

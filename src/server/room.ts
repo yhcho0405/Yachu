@@ -10,6 +10,7 @@ import {
   joinRoom,
   member,
   newRoom,
+  recipientState,
   type StoredRoom,
 } from './engine';
 import { cryptoDie, requireSecret } from './crypto';
@@ -117,6 +118,16 @@ export class GameRoom extends DurableObject<Env> {
       const attachment = socket.deserializeAttachment() as Connection | null;
       try {
         requireGameProtocol(message.state.gameType, attachment?.protocolVersion);
+        if (
+          message.state.gameType === 'avalon' &&
+          message.state.privateInfo &&
+          message.state.privateInfo.playerId !== attachment?.playerId
+        )
+          throw new GameError(
+            'RECIPIENT_MISMATCH',
+            '현재 참가자의 상태를 다시 확인해 주세요.',
+            503,
+          );
       } catch (error) {
         message = {
           type: 'error',
@@ -153,7 +164,7 @@ export class GameRoom extends DurableObject<Env> {
         }
         continue;
       }
-      this.send(socket, { type: 'state', state: room.state });
+      this.send(socket, { type: 'state', state: recipientState(room, a.playerId) });
     }
   }
   private errorMessage(
@@ -167,7 +178,9 @@ export class GameRoom extends DurableObject<Env> {
     const room = this.store.load();
     const compatible =
       room &&
-      (clientProtocol === 2 || (clientProtocol === undefined && room.state.gameType === 'yacht'));
+      (clientProtocol === 3 ||
+        (clientProtocol === 2 && room.state.gameType !== 'avalon') ||
+        (clientProtocol === undefined && room.state.gameType === 'yacht'));
     const permitted =
       compatible &&
       authenticated &&
@@ -183,7 +196,7 @@ export class GameRoom extends DurableObject<Env> {
         error instanceof GameError
           ? error.message
           : '요청을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.',
-      ...(permitted ? { state: room.state } : {}),
+      ...(permitted ? { state: recipientState(room, playerId) } : {}),
     };
   }
   async fetch(request: Request): Promise<Response> {
@@ -238,7 +251,8 @@ export class GameRoom extends DurableObject<Env> {
           throw new GameError('UPGRADE_REQUIRED', 'WebSocket 연결이 필요합니다.', 426);
         return this.ctx.blockConcurrencyWhile(async () => {
           try {
-            if (this.ctx.getWebSockets().length >= 8)
+            const maximumConnections = beforeMaintenance?.state.gameType === 'avalon' ? 20 : 8;
+            if (this.ctx.getWebSockets().length >= maximumConnections)
               throw new GameError(
                 'CONNECTION_LIMIT',
                 '이전 연결이 닫히는 중입니다. 잠시 후 다시 접속해 주세요.',
@@ -318,7 +332,7 @@ export class GameRoom extends DurableObject<Env> {
       await this.ctx.storage.sync();
       await this.schedule();
       if (path !== '/internal/state' || maintenanceChanged) this.broadcast();
-      return json({ state: room.state });
+      return json({ state: recipientState(room, session.playerId) });
     } catch (error) {
       if (session) this.broadcast();
       return failure(error);
@@ -421,7 +435,8 @@ export class GameRoom extends DurableObject<Env> {
       const room = this.store.load();
       if (!room) return;
       for (const [id, auth] of Object.entries(room.members))
-        if (auth.sessionKey === sessionKey) depart(room, id, Date.now(), () => crypto.randomUUID());
+        if (auth.sessionKey === sessionKey)
+          depart(room, id, Date.now(), () => crypto.randomUUID(), 'session_expired');
       this.store.save(room);
     });
     await this.ctx.storage.sync();

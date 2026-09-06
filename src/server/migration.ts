@@ -1,8 +1,9 @@
 import { CATEGORIES, type RoomState, type Scores, type YachtRoomState } from '../shared/protocol';
 import { RULES_VERSION, scoreDice, totals } from '../shared/rules';
 import { isTikatukaState } from '../shared/tikatuka';
+import { isAvalonInternalState, isAvalonRoomState } from '../shared/avalon';
 import { GameError } from './errors';
-import type { StoredRoom } from './engine';
+import type { InternalRoomState, StoredRoom } from './engine';
 
 const commonKeys = [
   'roomId',
@@ -184,6 +185,7 @@ function validYacht(state: Record<string, unknown>, legacy: boolean): boolean {
 /** Only the exact shipped Yacht v1 format qualifies for implicit game-type migration. */
 export function migratePublicState(value: unknown): RoomState {
   if (!isObject(value)) return fail();
+  if (value.gameType === 'avalon') return isAvalonRoomState(value) ? value : fail();
   const legacy =
     !Object.hasOwn(value, 'gameType') &&
     !Object.hasOwn(value, 'schemaVersion') &&
@@ -204,10 +206,16 @@ export function migratePublicState(value: unknown): RoomState {
   if (value.gameType === 'tikatuka' && validCommon(value) && isTikatukaState(value)) return value;
   return fail();
 }
+function migrateInternalState(value: unknown): InternalRoomState {
+  if (isObject(value) && value.gameType === 'avalon')
+    return isAvalonInternalState(value) ? value : fail();
+  const state = migratePublicState(value);
+  return state.gameType === 'avalon' ? fail() : state;
+}
 export function migrateStoredRoom(value: unknown): StoredRoom {
   if (!isObject(value) || !keys(value, ['state', 'members']) || !isObject(value.members))
     return fail();
-  const state = migratePublicState(value.state);
+  const state = migrateInternalState(value.state);
   if (
     state.gameType === 'tikatuka' &&
     state.phase === 'playing' &&

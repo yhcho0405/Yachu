@@ -1,5 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 const live = Boolean(process.env.PLAYWRIGHT_BASE_URL);
+const localURL = `http://127.0.0.1:${process.env.DICE_CI_PORT ?? '8787'}`;
 export default defineConfig({
   testDir: 'tests/browser',
   timeout: 600000,
@@ -13,7 +14,7 @@ export default defineConfig({
     ['json', { outputFile: 'test-results/report.json' }],
   ],
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:8787',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? localURL,
     trace: 'off',
     screenshot: 'only-on-failure',
     video: 'off',
@@ -45,7 +46,7 @@ export default defineConfig({
     ? undefined
     : {
         command: process.env.CI ? 'npm run dev:ci' : 'npm run dev',
-        url: 'http://127.0.0.1:8787',
+        url: localURL,
         reuseExistingServer: !process.env.CI,
         timeout: 120000,
       },

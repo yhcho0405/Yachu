@@ -188,7 +188,7 @@ describe('client protocol negotiation before room state delivery', () => {
       expect(() => requireGameProtocol(game, header)).not.toThrow();
   });
   it('requests refresh for every explicit unknown version and ambiguous WS query', () => {
-    for (const version of ['', '1', '3', '2, 3']) {
+    for (const version of ['', '1', '4', '2, 3']) {
       expect(() =>
         readClientProtocol(
           new Request('https://play.example/api/join', { headers: { 'X-Game-Protocol': version } }),
@@ -217,5 +217,15 @@ describe('client protocol negotiation before room state delivery', () => {
         }),
       ),
     ).toThrow('새로고침');
+  });
+  it('requires version 3 before Avalon delivery while retaining version 2 for existing games', () => {
+    const current = readClientProtocol(
+      new Request('https://play.example/api/join', { headers: { 'X-Game-Protocol': '3' } }),
+    );
+    expect(current).toBe(3);
+    for (const game of ['yacht', 'tikatuka', 'avalon'] as const)
+      expect(() => requireGameProtocol(game, current)).not.toThrow();
+    expect(() => requireGameProtocol('avalon', 2)).toThrow('새로고침');
+    expect(() => requireGameProtocol('avalon', undefined)).toThrow('새로고침');
   });
 });

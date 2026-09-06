@@ -1,8 +1,10 @@
 import type { GameType } from './games';
 import type { TikatukaIntent, TikatukaRoomState } from './tikatuka';
+import type { AvalonIntent, AvalonRoomState } from './avalon';
 export type { GameType } from './games';
 export type { TikatukaIntent, TikatukaRoomState } from './tikatuka';
-export const PROTOCOL_VERSION = 2 as const;
+export type { AvalonIntent, AvalonRoomState } from './avalon';
+export const PROTOCOL_VERSION = 3 as const;
 export const SCHEMA_VERSION = 2 as const;
 
 export const CATEGORIES = [
@@ -58,7 +60,7 @@ export interface Dice {
 }
 export interface RoomBase<G extends GameType, P extends CommonPlayer> {
   schemaVersion: typeof SCHEMA_VERSION;
-  protocolVersion: typeof PROTOCOL_VERSION;
+  protocolVersion: 2 | 3;
   gameType: G;
   roomId: string;
   code: string;
@@ -82,7 +84,8 @@ export interface YachtRoomState extends RoomBase<'yacht', Player> {
   rolls: number;
   previews: Record<Category, number>;
 }
-export type RoomState = YachtRoomState | TikatukaRoomState;
+/** Only recipient-safe snapshots belong to the client protocol. */
+export type RoomState = YachtRoomState | TikatukaRoomState | AvalonRoomState;
 export interface Session {
   playerId: string;
   nickname: string;
@@ -96,7 +99,7 @@ export type YachtIntent =
   | { type: 'hold'; held: boolean[] }
   | { type: 'roll' }
   | { type: 'score'; category: Category };
-export type Intent = YachtIntent | TikatukaIntent;
+export type Intent = YachtIntent | TikatukaIntent | AvalonIntent;
 export interface CommandEnvelope {
   requestId: string;
   gameId: string;
@@ -108,8 +111,9 @@ export type LegacyYachtCommand = CommandEnvelope &
 /** The legacy envelope is valid only for the existing Yacht protocol. */
 export type Command = CommandEnvelope &
   (
-    | (YachtIntent & { gameType: 'yacht'; protocolVersion: 2 })
-    | ((CommonIntent | TikatukaIntent) & { gameType: 'tikatuka'; protocolVersion: 2 })
+    | (YachtIntent & { gameType: 'yacht'; protocolVersion: 2 | 3 })
+    | ((CommonIntent | TikatukaIntent) & { gameType: 'tikatuka'; protocolVersion: 2 | 3 })
+    | ((CommonIntent | AvalonIntent) & { gameType: 'avalon'; protocolVersion: 3 })
     | LegacyYachtCommand
   );
 export interface ServerMessage {
@@ -123,6 +127,6 @@ export interface ServerMessage {
 // POST /api/session {nickname} => Session; GET /api/session => Session; DELETE /api/session
 // POST /api/rooms {} => {state:RoomState}; POST /api/join {code} => {state:RoomState}
 // GET /api/rooms/:code => {state:RoomState}; POST /api/rooms/:code/command Command => ServerMessage
-// GET /api/rooms/:code/ws => authenticated WebSocket; messages ServerMessage (full snapshots)
+// GET /api/rooms/:code/ws => authenticated WebSocket; recipient-authorized snapshots only.
 // GET /api/health => {ok:boolean,commit:string}; GET /version.json => {commit:string}
 // Invite URL /?room=CODE. Last room code saved locally; identity only cookie.

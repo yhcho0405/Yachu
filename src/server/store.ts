@@ -4,6 +4,7 @@ import {
   applyComputerTurn,
   GameError,
   member,
+  recipientState,
   type EngineClock,
   type StoredRoom,
 } from './engine';
@@ -104,11 +105,29 @@ export class RoomStore {
           throw new GameError('REQUEST_ID_REUSED', '요청 번호가 다른 동작에 사용되었습니다.', 409);
         const response = JSON.parse(previous.response as string) as ServerMessage;
         if (response.state) response.state = migratePublicState(response.state);
+        if (
+          response.state?.gameType === 'avalon' &&
+          response.state.privateInfo &&
+          response.state.privateInfo.playerId !== playerId
+        )
+          throw new GameError(
+            'STORED_STATE_INVALID',
+            '저장된 응답의 수신자를 확인할 수 없습니다.',
+            503,
+          );
         return response;
       }
       member(room, playerId, sessionKey);
       this.rate(`command:${playerId}`, clock.now, 60, 10_000);
       this.rate('room-command', clock.now, 180, 10_000);
+      if (command.type === 'av_chat') {
+        this.rate(`chat:${playerId}`, clock.now, 30, 60_000);
+        this.rate(`chat-gap:${playerId}`, clock.now, 1, 800);
+      }
+      if (command.type === 'av_signal') {
+        this.rate(`signal:${playerId}`, clock.now, 12, 60_000);
+        this.rate(`signal-gap:${playerId}`, clock.now, 1, 1500);
+      }
       const count = this.storage.sql.exec('SELECT COUNT(*) AS count FROM requests').toArray()[0];
       if (Number(count?.count) >= 50_000)
         throw new GameError(
@@ -120,7 +139,7 @@ export class RoomStore {
       const response: ServerMessage = {
         type: 'result',
         requestId: command.requestId,
-        state: room.state,
+        state: recipientState(room, playerId),
       };
       this.save(room);
       this.storage.sql.exec(

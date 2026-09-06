@@ -16,6 +16,14 @@ export const GAME_CATALOG = [
     maxPlayers: 2,
     soloMode: 'computer',
   },
+  {
+    id: 'avalon',
+    name: '아발론',
+    description: '정체를 추리하고 토론과 투표로 원정을 결정하는 보드게임.',
+    minPlayers: 5,
+    maxPlayers: 10,
+    soloMode: 'none',
+  },
 ] as const;
 
 export type GameType = (typeof GAME_CATALOG)[number]['id'];

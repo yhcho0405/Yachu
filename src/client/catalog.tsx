@@ -4,6 +4,17 @@ import { DieIcon } from './components';
 // Catalog images are captured from this app’s own procedural boards.
 // Game scenes and audio load only after entering an active game.
 export function GameThumbnail({ gameType }: { gameType: GameType }) {
+  if (gameType === 'avalon')
+    return (
+      <div className="avalon-card-board" aria-hidden="true">
+        <div className="avalon-card-ring">
+          {Array.from({ length: 10 }, (_, i) => (
+            <i key={i} style={{ transform: `rotate(${i * 36}deg) translateY(-72px)` }} />
+          ))}
+        </div>
+        <span className="avalon-card-sigil">✦</span>
+      </div>
+    );
   if (gameType === 'yacht')
     return (
       <div className="yacht-card-board" aria-hidden="true">
@@ -106,7 +117,9 @@ export function GameCatalog({
             <small>
               {game.soloMode === 'computer'
                 ? '컴퓨터 대전 · 온라인 1대1'
-                : '혼자 플레이 · 온라인 대전'}
+                : game.soloMode === 'none'
+                  ? '5–10인 · 정체 추리 · 토론과 투표'
+                  : '혼자 플레이 · 온라인 대전'}
             </small>
           </div>
         </button>
@@ -123,7 +136,9 @@ export function SelectedGameSummary({ gameType }: { gameType: GameType }) {
       <p>
         {game.soloMode === 'computer'
           ? '혼자 시작하면 컴퓨터와 대전합니다.'
-          : '혼자 또는 친구와 플레이할 수 있습니다.'}
+          : game.soloMode === 'none'
+            ? '5~10명이 모여 토론하고 투표하는 온라인 대전입니다.'
+            : '혼자 또는 친구와 플레이할 수 있습니다.'}
       </p>
     </div>
   );

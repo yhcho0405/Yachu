@@ -208,7 +208,7 @@ export function createMusic(): Music {
   function indexFor(scene: MusicScene): 0 | 1 {
     let index = nextIndex.get(scene);
     if (index === undefined) {
-      index = Math.random() < 0.5 ? 0 : 1;
+      index = MUSIC_TRACKS[scene].length === 1 || Math.random() < 0.5 ? 0 : 1;
       nextIndex.set(scene, index);
     }
     return index;
@@ -266,7 +266,10 @@ export function createMusic(): Music {
         foreground = slot;
         failures = 0;
         retryAt = 0;
-        nextIndex.set(selectedScene, slot.index === 0 ? 1 : 0);
+        nextIndex.set(
+          selectedScene,
+          MUSIC_TRACKS[selectedScene].length === 1 ? 0 : slot.index === 0 ? 1 : 0,
+        );
         ramp(slot, 1, FADE_SECONDS);
         for (const other of slots)
           if (other !== slot && other.status === 'playing') {

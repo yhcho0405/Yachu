@@ -22,6 +22,8 @@ const YachtGame = lazy(() => import('./games/yacht/YachtGame'));
 const YachtHelp = lazy(() => import('./games/yacht/Help'));
 const TikatukaGame = lazy(() => import('./games/tikatuka/TikatukaGame'));
 const TikatukaHelp = lazy(() => import('./games/tikatuka/Help'));
+const AvalonGame = lazy(() => import('./games/avalon/AvalonGame'));
+const AvalonHelp = lazy(() => import('./games/avalon/Help'));
 type Entry = { kind: 'create'; gameType: GameType; solo: boolean } | { kind: 'join'; code: string };
 class GameBoundary extends Component<{ name: string; children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
@@ -285,23 +287,25 @@ export default function App() {
                 <p id="nickname-hint">
                   {session ? '기존 게스트 이름으로 참가합니다.' : '가입 없이 사용할 수 있습니다.'}
                 </p>
-                <button
-                  data-testid="solo-button"
-                  className="button primary"
-                  disabled={!validNickname || busy}
-                  onClick={() =>
-                    requestEntry({ kind: 'create', gameType: selectedGame, solo: true })
-                  }
-                >
-                  <span>혼자 시작</span>
-                  <span>
-                    {gameMetadata(selectedGame).soloMode === 'computer' ? (
-                      '컴퓨터 대전'
-                    ) : (
-                      <Icon name="arrow" />
-                    )}
-                  </span>
-                </button>
+                {gameMetadata(selectedGame).soloMode !== 'none' && (
+                  <button
+                    data-testid="solo-button"
+                    className="button primary"
+                    disabled={!validNickname || busy}
+                    onClick={() =>
+                      requestEntry({ kind: 'create', gameType: selectedGame, solo: true })
+                    }
+                  >
+                    <span>혼자 시작</span>
+                    <span>
+                      {gameMetadata(selectedGame).soloMode === 'computer' ? (
+                        '컴퓨터 대전'
+                      ) : (
+                        <Icon name="arrow" />
+                      )}
+                    </span>
+                  </button>
+                )}
                 <button
                   data-testid="create-room"
                   className="button secondary"
@@ -314,7 +318,7 @@ export default function App() {
                   <span>
                     {gameMetadata(selectedGame).maxPlayers === 2
                       ? '1대1'
-                      : `2–${gameMetadata(selectedGame).maxPlayers}명`}
+                      : `${Math.max(2, gameMetadata(selectedGame).minPlayers)}–${gameMetadata(selectedGame).maxPlayers}명`}
                   </span>
                 </button>
                 <div className="join-divider">
@@ -365,10 +369,14 @@ export default function App() {
                 {room.phase === 'lobby'
                   ? '대기실'
                   : room.phase === 'finished'
-                    ? '경기 종료'
-                    : myTurn
-                      ? '내 차례'
-                      : `${current?.nickname ?? '상대'} 차례`}
+                    ? room.gameType === 'avalon' && !room.winner
+                      ? '경기 무효'
+                      : '경기 종료'
+                    : room.gameType === 'avalon'
+                      ? '원탁 회의'
+                      : myTurn
+                        ? '내 차례'
+                        : `${current?.nickname ?? '상대'} 차례`}
               </h1>
             </div>
             <button className="invite-button" onClick={() => void copyInvite()}>
@@ -405,8 +413,18 @@ export default function App() {
                       settings={settings}
                       onIntent={client.enqueue.bind(client)}
                     />
-                  ) : (
+                  ) : room.gameType === 'tikatuka' ? (
                     <TikatukaGame
+                      room={room}
+                      session={session}
+                      connection={view.reloadRequired ? 'connecting' : view.connection}
+                      queue={view.queue}
+                      error={view.error}
+                      settings={settings}
+                      onIntent={client.enqueue.bind(client)}
+                    />
+                  ) : (
+                    <AvalonGame
                       room={room}
                       session={session}
                       connection={view.reloadRequired ? 'connecting' : view.connection}
@@ -436,9 +454,15 @@ export default function App() {
       {modal === 'help' && (
         <Modal title={`${game.name} 게임 방법`} wide onClose={() => setModal(null)}>
           <Suspense fallback={<p role="status">게임 방법을 불러오고 있습니다.</p>}>
-            {visibleGame === 'yacht' ? <YachtHelp /> : <TikatukaHelp />}
+            {visibleGame === 'yacht' ? (
+              <YachtHelp />
+            ) : visibleGame === 'tikatuka' ? (
+              <TikatukaHelp />
+            ) : (
+              <AvalonHelp />
+            )}
           </Suspense>
-          <ConnectionPolicy />
+          <ConnectionPolicy gameType={visibleGame} />
         </Modal>
       )}
       {(modal === 'leave' || modal === 'switch') && (
@@ -451,7 +475,9 @@ export default function App() {
         >
           <p className="help-text">
             {room?.phase === 'playing'
-              ? '현재 경기를 나가면 기권 처리됩니다. 게임 목록만 둘러보려면 취소를 누르세요.'
+              ? room.gameType === 'avalon'
+                ? '아발론 경기 중 방을 나가면 전체 경기가 무효 종료됩니다. 게임 목록만 둘러보려면 취소를 누르세요.'
+                : '현재 경기를 나가면 기권 처리됩니다. 게임 목록만 둘러보려면 취소를 누르세요.'
               : '현재 방에서 나갑니다. 닉네임과 설정은 유지됩니다.'}
           </p>
           <div className="modal-buttons">

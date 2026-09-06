@@ -3958,3 +3958,146 @@ kbd {
 .tika-table:has(canvas[data-layout='columns']) .tika-layout-note {
   display: inline-flex;
 }
+/* Public Avalon catalog and lobby; the playable board styles load with its screen. */
+.avalon-card-board {
+  position: relative;
+  width: 235px;
+  height: 172px;
+  margin: auto;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse,
+    #765640 0 53%,
+    #b99a60 54% 56%,
+    #493a31 57% 65%,
+    #b29762 66% 68%,
+    #343831 69%
+  );
+  box-shadow: 0 17px 13px #1d241a30;
+  transform: perspective(650px) rotateX(17deg);
+}
+.avalon-card-ring {
+  position: absolute;
+  inset: 50% auto auto 50%;
+}
+.avalon-card-ring i {
+  display: block;
+  position: absolute;
+  width: 14px;
+  height: 20px;
+  border-radius: 5px 5px 8px 8px;
+  background: #c8c7af;
+  border: 2px solid #b29762;
+  transform-origin: 50% 50%;
+  margin: -10px -7px;
+  box-shadow: 0 4px 3px #0004;
+}
+.avalon-card-sigil {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #c7ad72;
+  font-size: 49px;
+  text-shadow: 0 2px #242a20;
+}
+.preview-avalon {
+  background: radial-gradient(ellipse at 50% 36%, #b8bea2, #d6d3b9 68%);
+}
+.avalon-lobby-options {
+  border-top: 1px solid #d9d8c8;
+  margin-top: 24px;
+  padding-top: 20px;
+}
+.avalon-lobby-options h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+.avalon-lobby-options p {
+  font-size: 12px;
+  line-height: 1.7;
+  color: #59665b;
+}
+.avalon-role-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0;
+}
+.avalon-role-options label,
+.avalon-lady-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #d7d7c8;
+  border-radius: 10px;
+  background: #faf9f1;
+  min-height: 44px;
+}
+.avalon-role-options input,
+.avalon-lady-option input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  margin-top: 2px;
+  accent-color: #355f4f;
+}
+.avalon-role-options strong,
+.avalon-lady-option strong {
+  display: block;
+  font-size: 13px;
+}
+.avalon-role-options small,
+.avalon-lady-option small {
+  display: block;
+  line-height: 1.6;
+  color: #66705f;
+  margin-top: 4px;
+  font-size: 11px;
+}
+.avalon-role-roster {
+  padding: 12px;
+  border-radius: 8px;
+  background: #eef0e6;
+}
+.avalon-start-issues {
+  color: #775324;
+  font-size: 12px;
+  line-height: 1.7;
+  padding-left: 20px;
+}
+.game-avalon .lobby-seats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.game-avalon .lobby-seat {
+  min-width: 0;
+  padding: 10px;
+  gap: 8px;
+}
+.game-avalon .lobby-seat strong {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.game-avalon .player-avatar {
+  background: #667267;
+  color: #fffdf0;
+}
+.game-avalon .ready-status {
+  font-size: 10px;
+}
+@media (max-width: 600px) {
+  .game-avalon .lobby-seats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .avalon-role-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .game-avalon .lobby-seat strong {
+    max-width: 170px;
+  }
+}

@@ -118,7 +118,7 @@ test('local protocol negotiation preserves legacy Yacht and protects initial Tik
     expect(legacySocket.opened).toBe(true);
     expect(legacySocket.state).toHaveProperty('dice');
     const legacyYachtBefore = await snapshot(host, yacht.code);
-    refreshOnly(await request(host, `/api/rooms/${yacht.code}`, undefined, '3'));
+    refreshOnly(await request(host, `/api/rooms/${yacht.code}`, undefined, '4'));
     expect(await snapshot(host, yacht.code)).toEqual(legacyYachtBefore);
 
     // The second room cannot return its Tika shape to a browser that never advertised support.
@@ -133,7 +133,7 @@ test('local protocol negotiation preserves legacy Yacht and protects initial Tik
     expect(tika.gameType).toBe('tikatuka');
     const beforeJoin = await snapshot(host, tika.code);
     refreshOnly(await request(guest, '/api/join', { code: tika.code }));
-    refreshOnly(await request(guest, '/api/join', { code: tika.code }, '3'));
+    refreshOnly(await request(guest, '/api/join', { code: tika.code }, '4'));
     expect(await snapshot(host, tika.code)).toEqual(beforeJoin);
     expect((await snapshot(host, tika.code)).players.map((player) => player.id)).toEqual([hostId]);
     const joined = await request(guest, '/api/join', { code: tika.code }, '2');
@@ -151,18 +151,18 @@ test('local protocol negotiation preserves legacy Yacht and protects initial Tik
       turnId: seated.turnId,
     };
     refreshOnly(await request(guest, `/api/rooms/${tika.code}`, undefined));
-    refreshOnly(await request(guest, `/api/rooms/${tika.code}`, undefined, '3'));
+    refreshOnly(await request(guest, `/api/rooms/${tika.code}`, undefined, '4'));
     refreshOnly(await request(guest, `/api/rooms/${tika.code}/command`, command));
     refreshOnly(
       await request(
         guest,
         `/api/rooms/${tika.code}/command`,
         { ...command, gameType: 'tikatuka', protocolVersion: 2 },
-        '3',
+        '4',
       ),
     );
     expect((await connect(guest, tika.code, 'legacy-tika')).opened).toBe(false);
-    expect((await connect(guest, tika.code, 'future-tika', '3')).opened).toBe(false);
+    expect((await connect(guest, tika.code, 'future-tika', '4')).opened).toBe(false);
     expect(await snapshot(guest, tika.code)).toEqual(seated);
     expect(await guest.evaluate(() => window.protocolSockets!['modern-guest']!.readyState)).toBe(1);
     expect(

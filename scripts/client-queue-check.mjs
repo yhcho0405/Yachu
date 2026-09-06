@@ -81,7 +81,7 @@ function mockServer(state, commandHandler) {
   globalThis.fetch = async (url, options = {}) => {
     assert.equal(
       options.headers?.['X-Game-Protocol'],
-      '2',
+      '3',
       'new HTTP requests explicitly advertise compatibility',
     );
     if (url === '/api/session') return reply(session);
@@ -113,7 +113,7 @@ install();
   await client.create('tester', true);
   await settle();
   assert.equal(commands.length, 0, 'solo start must wait for socket OPEN');
-  assert.equal(new URL(FakeSocket.all.at(-1).url).searchParams.get('protocolVersion'), '2');
+  assert.equal(new URL(FakeSocket.all.at(-1).url).searchParams.get('protocolVersion'), '3');
   FakeSocket.all.at(-1).open();
   await settle();
   assert.equal(commands.length, 1);
@@ -319,7 +319,7 @@ install();
   globalThis.fetch = async (url, options = {}) => {
     assert.equal(
       options.headers?.['X-Game-Protocol'],
-      '2',
+      '3',
       'new HTTP requests explicitly advertise compatibility',
     );
     if (url === '/api/session') return reply(session);
@@ -343,7 +343,7 @@ install();
   FakeSocket.all.at(-1).open();
   await settle();
   assert.equal(commands[0].gameType, 'tikatuka');
-  assert.equal(commands[0].protocolVersion, 2);
+  assert.equal(commands[0].protocolVersion, 3);
   assert.equal(commands[0].type, 'start');
   client.dispose();
 }
@@ -427,6 +427,99 @@ install();
   assert.equal(requests, 1, 'new commands wait for required reload');
   client.dispose();
 }
+for (const type of ['ready', 'start', 'rematch']) {
+  install();
+  const state = {
+    ...fixture(),
+    gameType: 'avalon',
+    protocolVersion: 3,
+    phase: 'lobby',
+    turnId: 'new-config',
+    phaseId: 'new-config',
+  };
+  local.set('atelier.room', state.code);
+  pending.set(
+    'atelier.pending',
+    JSON.stringify([
+      {
+        roomCode: state.code,
+        gameId: state.gameId,
+        turnId: 'old-config',
+        gameType: 'avalon',
+        intent: type === 'ready' ? { type, ready: true } : { type },
+      },
+    ]),
+  );
+  let sent = 0;
+  mockServer(state, () => {
+    sent++;
+    return reply({ type: 'result', state });
+  });
+  const client = new GameClient();
+  await client.boot();
+  FakeSocket.all.at(-1).open();
+  await settle();
+  assert.equal(
+    sent,
+    0,
+    `an unsent Avalon ${type} must not silently consent to a new configuration`,
+  );
+  assert.equal(client.getSnapshot().queue.length, 0);
+  client.dispose();
+}
+install();
+{
+  let state = {
+    ...fixture(),
+    gameType: 'avalon',
+    protocolVersion: 3,
+    stage: 'vote',
+    phaseId: 'vote-phase',
+    turnId: 'vote-phase',
+  };
+  const commands = [];
+  const handler = (command) => {
+    commands.push(command);
+    if (commands.length === 1) {
+      state = {
+        ...state,
+        stage: 'quest',
+        version: 20,
+        phaseId: 'quest-phase',
+        turnId: 'quest-phase',
+      };
+      return reply({ error: 'uncertain response' }, 503);
+    }
+    return reply({ type: 'result', state });
+  };
+  const client = await started(state, handler);
+  client.enqueue({
+    type: 'av_vote',
+    phaseId: 'vote-phase',
+    proposalId: 'proposal-id',
+    approve: true,
+  });
+  await settle();
+  const original = commands[0];
+  client.dispose();
+  mockServer(state, handler);
+  const restored = new GameClient();
+  await restored.boot();
+  FakeSocket.all.at(-1).open();
+  await settle();
+  assert.equal(commands.length, 2);
+  assert.deepEqual(
+    commands[1],
+    original,
+    'an already sent Avalon vote must retry its exact phase and request across reload',
+  );
+  assert.equal(restored.getSnapshot().queue.length, 0);
+  restored.dispose();
+}
+console.log(
+  'PASS: Avalon unsent lobby consent cannot cross configurations; submitted secret vote retries its exact original request after phase advance and reload.',
+);
+
 for (const state of [
   { ...fixture(), gameType: 'unknown-game' },
   { ...fixture(), protocolVersion: 3 },
@@ -450,5 +543,5 @@ for (const state of [
   client.dispose();
 }
 console.log(
-  'PASS: game-authoritative create/v2 envelope; Tika exact retry across reload; unsent cross-game queue isolation; protocol refresh preserves seat/session and gates commands; unknown snapshots require refresh.',
+  'PASS: game-authoritative create/v3 envelope and existing v2 snapshots; Tika exact retry across reload; unsent cross-game queue isolation; protocol refresh preserves seat/session and gates commands; unknown snapshots require refresh.',
 );

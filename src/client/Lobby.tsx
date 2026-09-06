@@ -1,8 +1,26 @@
-import { gameMetadata } from '../shared/games';
+import { lazy, Suspense } from 'react';
+import { gameMetadata, type GameType } from '../shared/games';
+import { getAvalonStartIssues } from '../shared/avalon';
 import type { RoomState, Session, Intent } from '../shared/protocol';
 import { GamePreview } from './catalog';
 import { Icon } from './components';
-export function ConnectionPolicy() {
+const AvalonLobbyOptions = lazy(() => import('./AvalonLobbyOptions'));
+export function ConnectionPolicy({ gameType = 'yacht' }: { gameType?: GameType }) {
+  if (gameType === 'avalon')
+    return (
+      <>
+        <h3>아발론 재접속과 경기 중단</h3>
+        <p className="help-text">
+          역할과 좌석은 경기 내내 고정됩니다. 연결이 끊기면 경기당 누적 2분 동안 재접속할 수 있고,
+          같은 역할과 제출 상태로 돌아옵니다.
+        </p>
+        <p className="help-text">
+          유예 시간이 끝나거나 참가자가 명시적으로 퇴장하면 전체 경기를 무효 종료합니다. 특정 진영의
+          승리로 판정하거나 전체 역할을 공개하지 않습니다. 게임 목록을 둘러보는 동안에는 현재 방에
+          계속 연결됩니다.
+        </p>
+      </>
+    );
   return (
     <>
       <h3>온라인 참가 안내</h3>
@@ -36,8 +54,11 @@ export default function Lobby({
   const game = gameMetadata(room.gameType);
   const own = room.players.find((player) => player.id === session.playerId);
   const host = room.hostId === session.playerId;
+  const configIssues =
+    room.gameType === 'avalon' ? getAvalonStartIssues(room.players.length, room.config) : [];
   const readyToStart =
     room.players.length >= game.minPlayers &&
+    configIssues.length === 0 &&
     room.players.every((player) => player.connected && (player.id === room.hostId || player.ready));
   return (
     <div className={`lobby-layout game-${room.gameType}`}>
@@ -50,7 +71,7 @@ export default function Lobby({
             <br />
             {game.minPlayers === game.maxPlayers
               ? `${game.maxPlayers}명이 준비하면 시작할 수 있습니다.`
-              : `최대 ${game.maxPlayers}명까지 참가할 수 있습니다.`}
+              : `${game.minPlayers === 1 ? 1 : game.minPlayers}~${game.maxPlayers}명이 플레이할 수 있습니다.`}
           </p>
         </div>
         <div className="lobby-seats">
@@ -86,6 +107,15 @@ export default function Lobby({
             );
           })}
         </div>
+        {room.gameType === 'avalon' && (
+          <Suspense fallback={<p>역할 설정 불러오는 중…</p>}>
+            <AvalonLobbyOptions
+              room={room}
+              canEdit={host && connected && !pending}
+              onIntent={onIntent}
+            />
+          </Suspense>
+        )}
         <div className="lobby-controls">
           <button
             data-testid="ready-button"
@@ -107,15 +137,21 @@ export default function Lobby({
           )}
         </div>
         <p className="lobby-wait">
-          {host
-            ? '참가자가 모두 준비하면 게임을 시작하세요.'
-            : '준비를 마치면 방장이 게임을 시작합니다.'}
+          {room.players.length < game.minPlayers
+            ? `시작하려면 ${game.minPlayers - room.players.length}명이 더 필요합니다.`
+            : configIssues.length
+              ? configIssues[0]
+              : host
+                ? '참가자가 모두 준비하면 게임을 시작하세요.'
+                : '준비를 마치면 방장이 게임을 시작합니다.'}
         </p>
         <div className="policy-note">
-          <strong>재접속과 기권</strong>
+          <strong>{room.gameType === 'avalon' ? '재접속과 경기 중단' : '재접속과 기권'}</strong>
           <p>
-            연결이 끊기면 경기당 누적 2분 동안 기다립니다. 시간이 지나거나 방을 나가면 기권
-            처리됩니다. <button onClick={onHelp}>자세히 보기</button>
+            {room.gameType === 'avalon'
+              ? '연결이 끊기면 경기당 누적 2분 동안 기다립니다. 시간이 지나거나 참가자가 방을 나가면 전체 경기를 무효 종료하며 역할을 공개하지 않습니다.'
+              : '연결이 끊기면 경기당 누적 2분 동안 기다립니다. 시간이 지나거나 방을 나가면 기권 처리됩니다.'}{' '}
+            <button onClick={onHelp}>자세히 보기</button>
           </p>
         </div>
       </section>

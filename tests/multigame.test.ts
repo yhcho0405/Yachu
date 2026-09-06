@@ -91,7 +91,7 @@ describe('common authority with separate game adapters', () => {
     const wrongWire = { ...legacy, gameType: 'tikatuka', protocolVersion: 2 };
     expect(() => parseCommand(wrongWire)).toThrow('동작');
     expect(() =>
-      parseCommand({ ...wrongWire, type: 'ready', ready: true, protocolVersion: 3 }),
+      parseCommand({ ...wrongWire, type: 'ready', ready: true, protocolVersion: 4 }),
     ).toThrow('좌석');
   });
   it('a computer has no externally usable membership and alarms consume only a due action', () => {

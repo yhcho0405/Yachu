@@ -208,6 +208,22 @@ afterEach(() => {
 });
 
 describe('shared streamed music', () => {
+  it('crossfades the single Avalon track back into itself without selecting a missing second file', async () => {
+    vi.mocked(Math.random).mockReturnValue(0.9);
+    const player = engine();
+    player.setScene('avalon');
+    await player.unlock();
+    await flush(1600);
+    expect(tracks()).toEqual(['/music/aval1.mp3']);
+    const first = active();
+    first.currentTime = first.duration - 1;
+    await flush(100);
+    expect(tracks()).toEqual(['/music/aval1.mp3', '/music/aval1.mp3']);
+    await flush(1600);
+    expect(first.paused).toBe(true);
+    expect(active().src).toBe('/music/aval1.mp3');
+    expect(Media.instances).toHaveLength(2);
+  });
   it('creates nothing before a gesture, primes exactly two persistent elements, and normalizes separately from volume', async () => {
     const player = engine();
     player.setScene('yacht');
