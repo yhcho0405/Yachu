@@ -528,6 +528,7 @@ for (const count of [5, 10]) {
       await host.screenshot({
         path: info.outputPath(`avalon-${count}-result.png`),
         clip,
+        caret: 'initial',
       });
       checkpoint = '재경기 · 로비';
       await host.getByTestId('rematch').click();
