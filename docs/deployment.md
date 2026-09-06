@@ -16,7 +16,7 @@ CLOUDFLARE_API_TOKEN과 계정ID는 Worker 런타임으로 전달하지 않는�
 
 ## 비용과 한도
 
-Cloudflare 공식 문서(2026-09-06 조회)는 SQLite-backed Durable Objects의 Workers Free 사용을 지원한다. 무료 한도와 초과 시 동작은 계정 플랜에 의존하며 무제한 서비스를 뜻하지 않는다. 앱은 상시타이머 없이 WebSocket Hibernation/Alarm, DPR 상한과 정적자산 직접 제공을 사용한다. Registry는 작은 친구 모임을 위한 단일객체이며 대규모공개서비스의 병목이 될 수 있다. 유료플랜/결제설정은 이 프로젝트에서 변경하지 않는다. 실제 계정의 플랜명/사용량을 확인하지 않았다면 확인했다고 주장하지 않는다.
+2026-09-06 17:18 KST에 로그인된 Cloudflare 대시보드의 Workers plans 화면에서 **Free / Current plan**을 직접 확인했다. 플랜이나 결제 설정을 변경하지 않았다. Cloudflare 공식 문서(2026-09-06 조회)는 SQLite-backed Durable Objects의 Workers Free 사용을 지원한다. 무료 한도와 초과 시 동작은 계정 플랜에 의존하며 무제한 서비스를 뜻하지 않는다. 앱은 상시타이머 없이 WebSocket Hibernation/Alarm, DPR 상한과 정적자산 직접 제공을 사용한다. Registry는 작은 친구 모임을 위한 단일객체이며 대규모공개서비스의 병목이 될 수 있다. 유료플랜/결제설정은 이 프로젝트에서 변경하지 않는다. 대시보드에 표시된 Free 한도는 Workers 요청 100,000회/일과 CPU 10ms/요청, Durable Objects 요청 100,000회/일·13,000 GB-s/일·SQL 읽기 5,000,000행/일·쓰기 100,000행/일·저장 5GB다. 이 값은 당시 표시된 계정 플랜의 한도이며, 미래의 잔여량을 보장하지 않는다. 같은 날 17:19 KST 배포 전 Workers & Pages 화면은 프로젝트 없음, 당일 요청 0/100,000, CPU 0ms로 표시했다. 공개 서비스로 확대하기 전 사용량을 확인해야 한다.
 
 ## 업데이트와 복구
 

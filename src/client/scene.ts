@@ -3,12 +3,14 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { orientationForValue, topValue } from '../shared/orientations';
 import type { Dice } from '../shared/protocol';
+import { CONTACT_TIME, constrainContact, contactRollQuaternion } from './dice-contact';
 
 export interface SceneOptions {
   onDieClick(id: number): void;
   onError(message: string): void;
   onAnimationChange?(active: boolean): void;
   onImpact?(intensity: number): void;
+  onCollision?(intensity: number): void;
 }
 export interface SceneUpdate {
   rollKey: string;
@@ -507,6 +509,7 @@ export function createDiceScene(container: HTMLElement, options: SceneOptions): 
     slowFrames = 0,
     quality = lowPower ? 1 : 1.75;
   let press: { x: number; y: number; id?: number } | undefined;
+  let contact: { ids: [number, number]; start: number; fired: boolean } | undefined;
   const rotationMatrix = new THREE.Matrix4();
   function movingState(active: boolean) {
     if (active !== animating) {
@@ -552,6 +555,8 @@ export function createDiceScene(container: HTMLElement, options: SceneOptions): 
             new THREE.Euler(4 * Math.PI * p, 2 * Math.PI * p, 6 * Math.PI * p),
           );
           die.mesh.quaternion.multiply(spin);
+          if (contact?.ids.includes(id))
+            die.mesh.quaternion.copy(contactRollQuaternion(motion.fromQ, motion.toQ, t));
           die.mesh.position.x += Math.sin(t * Math.PI * 2 + id) * Math.sin(t * Math.PI) * 0.065;
           die.mesh.position.z += Math.sin(Math.PI * t) * 0.8;
           let bounce = 0;
@@ -581,6 +586,22 @@ export function createDiceScene(container: HTMLElement, options: SceneOptions): 
         } else active = true;
       }
       updateAccessories(id, die);
+    }
+    if (contact) {
+      const a = dice.get(contact.ids[0])!;
+      const b = dice.get(contact.ids[1])!;
+      const t = clamp((now - contact.start) / 1100);
+      if (a.motion?.roll && b.motion?.roll) {
+        constrainContact(a.mesh.position, a.mesh.quaternion, b.mesh.position, b.mesh.quaternion, t);
+        updateAccessories(contact.ids[0], a);
+        updateAccessories(contact.ids[1], b);
+        if (!contact.fired && t >= CONTACT_TIME && t <= 0.42) {
+          contact.fired = true;
+          options.onCollision?.(0.48);
+        }
+      }
+      if (t >= 0.42) contact.fired = true;
+      if (t === 1) contact = undefined;
     }
     const prepare = pending && !reduced && now - pendingStart < 500;
     const lean =
@@ -685,6 +706,7 @@ export function createDiceScene(container: HTMLElement, options: SceneOptions): 
       frame = 0;
     } else {
       // Visibility recovery shows the newest committed pose, without re-emitting past impacts.
+      contact = undefined;
       for (const die of dice.values())
         if (die.motion) {
           die.mesh.position.copy(die.motion.to);
@@ -732,6 +754,15 @@ export function createDiceScene(container: HTMLElement, options: SceneOptions): 
       const newRoll = key !== state.rollKey;
       const animateRoll = newRoll && state.animate && !reduced && !document.hidden;
       const now = performance.now();
+      if (newRoll || reduced) contact = undefined;
+      if (animateRoll) {
+        const rolling = nextDice
+          .filter((die) => !die.held && dice.has(die.id) && die.value >= 1 && die.value <= 6)
+          .map((die) => die.id)
+          .sort((a, b) => a - b);
+        if (rolling.length >= 2)
+          contact = { ids: [rolling[0], rolling[1]], start: now, fired: false };
+      }
       for (const value of nextDice) {
         const die = dice.get(value.id);
         if (!die || value.value < 1 || value.value > 6) continue;

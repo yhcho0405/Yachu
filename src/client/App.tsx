@@ -205,6 +205,7 @@ function Board({
         onError: setError,
         onAnimationChange: (active) => animate.current(active),
         onImpact: (intensity) => audio.play('impact', intensity),
+        onCollision: (intensity) => audio.play('collision', intensity),
       });
     } catch {
       setError('3D 화면을 불러오지 못했어요. 아래 주사위 버튼으로 계속 플레이할 수 있어요.');

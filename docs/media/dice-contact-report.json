@@ -1,0 +1,168 @@
+{
+  "date": "2026-09-06T08:25:52.969Z",
+  "browser": "153.0.8010.12",
+  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)",
+  "viewport": {
+    "width": 1000,
+    "height": 700,
+    "dpr": 1
+  },
+  "results": [
+    {
+      "calls": [
+        {
+          "type": "collision",
+          "i": 0.48,
+          "time": 221.20000004768372
+        },
+        {
+          "type": "impact",
+          "i": 0.72,
+          "time": 498.10000014305115
+        },
+        {
+          "type": "impact",
+          "i": 0.39,
+          "time": 804.2999999523163
+        },
+        {
+          "type": "impact",
+          "i": 0.16,
+          "time": 1006
+        }
+      ],
+      "states": [
+        true,
+        false
+      ],
+      "faces": [
+        6,
+        5,
+        4,
+        3,
+        2
+      ],
+      "animating": "false",
+      "errors": [],
+      "name": "five"
+    },
+    {
+      "calls": [
+        {
+          "type": "collision",
+          "i": 0.48,
+          "time": 229
+        },
+        {
+          "type": "impact",
+          "i": 0.72,
+          "time": 496.7000000476837
+        },
+        {
+          "type": "impact",
+          "i": 0.39,
+          "time": 804.7000000476837
+        },
+        {
+          "type": "impact",
+          "i": 0.16,
+          "time": 1003.5
+        }
+      ],
+      "states": [
+        true,
+        false
+      ],
+      "faces": [
+        6,
+        5,
+        4,
+        3,
+        2
+      ],
+      "animating": "false",
+      "errors": [],
+      "name": "nonadjacent"
+    },
+    {
+      "calls": [
+        {
+          "type": "impact",
+          "i": 0.72,
+          "time": 498.30000019073486
+        },
+        {
+          "type": "impact",
+          "i": 0.39,
+          "time": 806.7000000476837
+        },
+        {
+          "type": "impact",
+          "i": 0.16,
+          "time": 1006.2000000476837
+        }
+      ],
+      "states": [
+        true,
+        false
+      ],
+      "faces": [
+        6,
+        5,
+        4,
+        3,
+        2
+      ],
+      "animating": "false",
+      "errors": [],
+      "name": "one"
+    },
+    {
+      "calls": [],
+      "states": [],
+      "faces": [
+        6,
+        5,
+        4,
+        3,
+        2
+      ],
+      "animating": "false",
+      "errors": [],
+      "name": "reduced"
+    },
+    {
+      "calls": [],
+      "states": [],
+      "faces": [
+        6,
+        5,
+        4,
+        3,
+        2
+      ],
+      "animating": "false",
+      "errors": [],
+      "name": "reconnect"
+    },
+    {
+      "calls": [],
+      "states": [
+        true,
+        false
+      ],
+      "faces": [
+        6,
+        5,
+        4,
+        3,
+        2
+      ],
+      "animating": "false",
+      "errors": [],
+      "name": "reduce-during-launch"
+    }
+  ],
+  "pageErrors": [],
+  "disposed": true
+}
