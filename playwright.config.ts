@@ -8,6 +8,7 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: 0,
+  maxFailures: process.env.CI ? 1 : undefined,
   reporter: [
     ['list'],
     ['html', { open: 'never' }],

@@ -11,7 +11,7 @@ concurrency:
 jobs:
   verify-deploy:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 75
     env:
       WRANGLER_SEND_METRICS: 'false'
     steps:

@@ -112,6 +112,7 @@ for (const count of [5, 10]) {
     const contexts: BrowserContext[] = [];
     const pages: Page[] = [];
     const errors: string[] = [];
+    let checkpoint = '브라우저 준비';
     try {
       for (let index = 0; index < count; index++) {
         const context = await browser.newContext({
@@ -126,6 +127,7 @@ for (const count of [5, 10]) {
         pages.push(page);
       }
       const host = pages[0];
+      checkpoint = '입장 · 방 생성';
       await host.goto('/');
       await host.getByTestId('game-card-avalon').click();
       await expect(host.getByTestId('solo-button')).toHaveCount(0);
@@ -134,6 +136,7 @@ for (const count of [5, 10]) {
       const code = await getCode(host);
       await expect(host.getByTestId('start-game')).toBeDisabled();
       for (let index = 1; index < count; index++) {
+        checkpoint = `입장 · 참가자 ${index + 1}`;
         await pages[index].goto(`/?room=${code}`);
         await pages[index].getByTestId('nickname-input').fill(`원탁 ${count}인 ${index + 1}`);
         await pages[index].getByTestId('join-room').click();
@@ -143,6 +146,7 @@ for (const count of [5, 10]) {
           'avalon',
         );
       }
+      checkpoint = '설정';
       if (count === 10) {
         for (const role of ['percival', 'morgana', 'mordred', 'oberon'] as const) {
           await host.getByTestId(`av-option-${role}`).click();
@@ -154,11 +158,13 @@ for (const count of [5, 10]) {
         await expect.poll(async () => (await state(host)).config.ladyOfLake).toBe(true);
       }
       for (let index = 1; index < count; index++) {
+        checkpoint = `준비 · 참가자 ${index + 1}`;
         await pages[index].getByTestId('ready-button').click();
         await expect
           .poll(async () => (await state(host)).players.filter((player) => player.ready).length)
           .toBeGreaterThanOrEqual(index);
       }
+      checkpoint = '시작 · 상태 수신';
       await host.getByTestId('start-game').click();
       await Promise.all(pages.map((page) => stage(page, 'team')));
       let room = await agree(pages);
@@ -172,12 +178,14 @@ for (const count of [5, 10]) {
       const merlinIndex = ownRoles.indexOf('merlin');
       const byId = (id: string) => pages[ids.indexOf(id)];
       expect(room.revealedRoles).toEqual([]);
+      checkpoint = '시작 · 수신자별 HTTP 일치';
       for (let index = 0; index < count; index++) {
         const api = await snapshot(pages[index], code);
         expect(api.privateInfo?.playerId).toBe(ids[index]);
         expect(api.privateInfo?.role).toBe(ownRoles[index]);
         expect(publicGame(api)).toBe(publicGame(room));
       }
+      checkpoint = '목록 왕복 · 음악';
       await musicPlaying(host, 'aval');
       const beforeBrowse = publicGame(room);
       await Promise.all([
@@ -193,6 +201,7 @@ for (const count of [5, 10]) {
       await expect(host.locator('canvas')).toHaveCount(1);
 
       // Role opening, note editing and unconfirmed seat selection are local-only actions.
+      checkpoint = '개인 패널 · 메모';
       const localVersion = (await state(host)).version;
       await host.getByTestId('av-private-toggle').click();
       await host.getByTestId('av-notes').fill('개인 메모 · 전송하지 않음');
@@ -201,6 +210,7 @@ for (const count of [5, 10]) {
       await host.getByTestId('av-private-toggle').click();
       await expect(host.getByTestId('av-private-content')).toHaveCount(0);
       for (const width of [360, 800, 1366]) {
+        checkpoint = `화면 배치 · 폭 ${width}`;
         await host.setViewportSize({ width, height: 900 });
         await expect
           .poll(() => host.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1))
@@ -218,11 +228,13 @@ for (const count of [5, 10]) {
           );
           expect(order.every((value, index) => index === 0 || value > order[index - 1])).toBe(true);
         }
+        checkpoint = `초기 화면 캡처 · 폭 ${width}`;
         await host.screenshot({
           path: info.outputPath(`avalon-${count}-${width}.png`),
           fullPage: true,
         });
       }
+      checkpoint = '첫 투표 · 원정대 초안';
       room = await state(host);
       const teamFor = (value: AvalonRoomState) =>
         [ids[evilIndex], ...ids.filter((id) => id !== ids[evilIndex])].slice(
@@ -234,17 +246,21 @@ for (const count of [5, 10]) {
       await selectSeats(firstLeader, room, firstTeam);
       expect((await snapshot(host, code)).version).toBe(room.version);
       expect((await state(pages[1])).proposal).toBeNull();
+      checkpoint = '첫 투표 · 제안 확정';
       await firstLeader.getByTestId('av-team-confirm').click();
       await Promise.all(pages.map((page) => stage(page, 'vote')));
       await agree(pages);
       // Another participant's submission and a chat update must preserve an unsubmitted draft.
+      checkpoint = '첫 투표 · 일부 제출';
       await pages[1].getByTestId('av-vote-approve').click();
       await vote(host, false);
       await expect(host.getByTestId('av-submitted')).toBeVisible();
       await expect(pages[1].getByTestId('av-vote-approve')).toHaveAttribute('aria-pressed', 'true');
+      checkpoint = '첫 투표 · 채팅과 반응';
       const message = '\u1112\u1161\u11ab\u1100\u1173\u11af <b>그대로 보이는 의견</b>';
       await pages[2].getByTestId('av-chat-input').fill(message);
       if (count === 5 && !process.env.PLAYWRIGHT_BASE_URL) {
+        checkpoint = '로컬 채팅 · 오류 복구';
         // Local client recovery only: reject two chat requests at the browser boundary.
         // No rate-limit requests reach the server; deployed runs keep ordinary UI traffic.
         const chatter = pages[2];
@@ -330,6 +346,7 @@ for (const count of [5, 10]) {
           await chatter.unroute(endpoint);
         }
       }
+      checkpoint = '첫 투표 · 정상 채팅 전송';
       await pages[2].getByTestId('av-chat-send').click();
       await expect(pages[2].getByTestId('av-chat-input')).toHaveValue('');
       await expect(host.getByTestId('av-chat-message').last()).toContainText(
@@ -343,6 +360,7 @@ for (const count of [5, 10]) {
       expect((await state(host)).history.proposals).toHaveLength(0);
       for (let index = 1; index < count; index++)
         expect((await state(pages[index])).privateInfo!.myVote).toBeNull();
+      checkpoint = '첫 투표 · 새로고침';
       await host.reload();
       await stage(host, 'vote');
       await expect(host.getByTestId('av-submitted')).toBeVisible();
@@ -351,6 +369,7 @@ for (const count of [5, 10]) {
       await host.getByTestId('av-private-toggle').click();
       await expect(host.getByTestId('av-notes')).toHaveValue('개인 메모 · 전송하지 않음');
       await host.getByTestId('av-private-toggle').click();
+      checkpoint = '첫 투표 · 전원 제출과 부결';
       await pages[1].getByTestId('av-vote-submit').click();
       await Promise.all(pages.slice(2).map((page) => vote(page, false)));
       await stage(host, 'team');
@@ -360,6 +379,7 @@ for (const count of [5, 10]) {
       await expect(host.getByTestId('av-vote-table')).toContainText('반대');
 
       for (let quest = 1; quest <= 4; quest++) {
+        checkpoint = `원정 ${quest} · 구성`;
         await stage(host, 'team');
         room = await agree(pages);
         expect(room.questNumber).toBe(quest);
@@ -368,6 +388,7 @@ for (const count of [5, 10]) {
         await selectSeats(leader, room, team);
         await leader.getByTestId('av-team-confirm').click();
         await Promise.all(pages.map((page) => stage(page, 'vote')));
+        checkpoint = `원정 ${quest} · 전원 투표`;
         await Promise.all(pages.map((page) => vote(page, true)));
         await Promise.all(pages.map((page) => stage(page, 'quest')));
         room = await agree(pages);
@@ -380,6 +401,7 @@ for (const count of [5, 10]) {
           if (projections[ids.indexOf(id)].privateInfo!.alignment === 'good')
             await expect(memberPage.getByTestId('av-card-fail')).toBeDisabled();
         }
+        checkpoint = `원정 ${quest} · 일부 카드 제출`;
         await card(byId(firstId), firstId === failId);
         await expect(byId(firstId).getByTestId('av-submitted')).toBeVisible();
         // A partial quest reveals only submitted membership, never another player's card.
@@ -388,6 +410,7 @@ for (const count of [5, 10]) {
           expect(partial.privateInfo!.myQuestCard).toBeNull();
           expect(partial.history.quests).toHaveLength(quest - 1);
         }
+        checkpoint = `원정 ${quest} · 카드 집계`;
         await Promise.all(team.slice(1).map((id) => card(byId(id), id === failId)));
         await expect.poll(async () => (await state(host)).history.quests.length).toBe(quest);
         room = await agree(pages);
@@ -396,6 +419,7 @@ for (const count of [5, 10]) {
         expect(result.failed).toBe(quest === 1);
         expect(room.revealedRoles).toHaveLength(0);
         if (room.stage === 'lady') {
+          checkpoint = `원정 ${quest} · Lady`;
           const holderId = room.lady!.holderId;
           const holder = byId(holderId);
           const personal = await state(holder);
@@ -415,6 +439,7 @@ for (const count of [5, 10]) {
           }
         }
       }
+      checkpoint = '암살';
       await stage(host, 'assassination');
       room = await agree(pages);
       expect(room.winner).toBeNull();
@@ -429,6 +454,7 @@ for (const count of [5, 10]) {
       ).toHaveLength(count - 1);
       await selectSeats(assassin, room, [ids[targetIndex]]);
       await assassin.getByTestId('av-assassinate-confirm').click();
+      checkpoint = '최종 결과 확인';
       await stage(host, 'finished');
       room = await agree(pages);
       expect(room.winner).toBe(count === 5 ? 'evil' : 'good');
@@ -436,25 +462,30 @@ for (const count of [5, 10]) {
       await expect(host.getByTestId('av-results')).toContainText(
         count === 5 ? '악 승리' : '선 승리',
       );
-      await host.screenshot({
+      checkpoint = '결과 캡처';
+      await expect(host.getByTestId('av-role-reveal').locator(':scope > div')).toHaveCount(count);
+      await host.getByTestId('av-results').screenshot({
         path: info.outputPath(`avalon-${count}-result.png`),
-        fullPage: true,
       });
+      checkpoint = '재경기 · 로비';
       await host.getByTestId('rematch').click();
       await stage(host, 'lobby');
       expect((await state(host)).privateInfo).toBeNull();
+      checkpoint = '재경기 · 준비';
       for (let index = 1; index < count; index++) {
         await pages[index].getByTestId('ready-button').click();
         await expect
           .poll(async () => (await state(host)).players.filter((player) => player.ready).length)
           .toBeGreaterThanOrEqual(index);
       }
+      checkpoint = '재경기 · 시작';
       await host.getByTestId('start-game').click();
       await stage(host, 'team');
       room = await agree(pages);
       expect(room.gameId).not.toBe(gameId);
       expect(room.players.map((player) => player.id)).toEqual(ids);
       expect(room.revealedRoles).toEqual([]);
+      checkpoint = '재경기 · 명시 퇴장 무효';
       // Explicit leave follows the documented all-player void policy and never reveals roles.
       await host.getByRole('button', { name: '방 나가기', exact: true }).click();
       await host
@@ -465,6 +496,20 @@ for (const count of [5, 10]) {
       expect((await state(pages[1])).winner).toBeNull();
       expect((await state(pages[1])).revealedRoles).toEqual([]);
       expect(errors).toEqual([]);
+    } catch (error) {
+      try {
+        await info.attach('avalon-public-checkpoint', {
+          contentType: 'application/json',
+          body: JSON.stringify({
+            count,
+            checkpoint,
+            errorName: error instanceof Error ? error.name : 'UnknownError',
+          }),
+        });
+      } catch {
+        // A diagnostic attachment failure must never replace the original test failure.
+      }
+      throw error;
     } finally {
       await Promise.all(contexts.map((context) => context.close()));
     }

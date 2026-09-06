@@ -3923,7 +3923,8 @@ kbd {
   object-fit: contain;
 }
 .catalog-preview[data-preview-loaded='true'] > .yacht-card-board,
-.catalog-preview[data-preview-loaded='true'] > .tika-card-board {
+.catalog-preview[data-preview-loaded='true'] > .tika-card-board,
+.catalog-preview[data-preview-loaded='true'] > .avalon-card-board {
   visibility: hidden;
 }
 .tika-lane-owner {
@@ -4003,6 +4004,9 @@ kbd {
 }
 .preview-avalon {
   background: radial-gradient(ellipse at 50% 36%, #b8bea2, #d6d3b9 68%);
+}
+.preview-avalon[data-preview-loaded='true'] {
+  background: #eeede6;
 }
 .avalon-lobby-options {
   border-top: 1px solid #d9d8c8;

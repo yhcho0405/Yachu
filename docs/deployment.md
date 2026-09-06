@@ -12,6 +12,8 @@ GitHub Actions의 main push만 사용한다. 등록된 세 Secrets의 값을 로
 6. Wrangler가 출력한 workers.dev URL에서 세 게임의 동일한 정상 사용자 브라우저 검사를 재실행한다. 부정 요청 검사는 운영에서 실행하지 않는다.
 7. Actions요약에 URL/SHA/상태를 기록하고 쿠키 없는 스크린샷과 보고서를7일 보관한다.
 
+세 게임의 로컬19개와 운영14개 전 경기 검사를 순차 실행하므로 작업 전체 제한은75분이다. 개별 경기10분·조작15초·재시도0 기준은 유지한다. CI 브라우저 검사에서 첫 실패가 생기면 실행을 종료하고 해당 보고서를 보관한다. 모든 필수 검사가 통과해야 배포한다.
+
 CLOUDFLARE_API_TOKEN과 계정ID는 Worker 런타임으로 전달하지 않는다. SESSION_SECRET은 배포마다 바꾸지 않는다. 기존 비밀과 Durable Object 바인딩/마이그레이션을 보존한다. 실제값 없는 예시는 루트.env.example에만 둔다.
 
 일반 개발 명령 `npm run dev`는 Wrangler CLI를 사용한다. CI 브라우저 서버 `npm run dev:ci`는 이미 빌드한 클라이언트와 Wrangler dry-run Worker 번들을 읽는다. 루트 Wrangler 설정을 공식 SDK 도우미로 변환하고, 잠금 파일에 고정된 Wrangler 자신의 Miniflare/workerd를 실행한다. 정적 자산 라우팅·헤더, API, WebSocket, SQLite Durable Objects는 모두 실제 workerd 안에서 처리한다. 별도 Node.js 게임 서버나 독립 인프라 설정은 없다. Wrangler 개발 프록시의 CI 종료 문제를 피하기 위한 실행 방식이며 [경위와 검증 기록](verification.md#ci-실행-중-확인한-문제)을 남겼다.
