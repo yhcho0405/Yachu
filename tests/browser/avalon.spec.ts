@@ -244,6 +244,92 @@ for (const count of [5, 10]) {
       await expect(pages[1].getByTestId('av-vote-approve')).toHaveAttribute('aria-pressed', 'true');
       const message = '\u1112\u1161\u11ab\u1100\u1173\u11af <b>그대로 보이는 의견</b>';
       await pages[2].getByTestId('av-chat-input').fill(message);
+      if (count === 5 && !process.env.PLAYWRIGHT_BASE_URL) {
+        // Local client recovery only: reject two chat requests at the browser boundary.
+        // No rate-limit requests reach the server; deployed runs keep ordinary UI traffic.
+        const chatter = pages[2];
+        const endpoint = `**/api/rooms/${code}/command`;
+        const repeatedError = '잠시 기다린 뒤 채팅을 다시 보내 주세요.';
+        let rejected = 0;
+        let completedWithoutHistory = 0;
+        await chatter.route(endpoint, async (route) => {
+          const request = route.request();
+          if (
+            request.method() === 'POST' &&
+            (request.postDataJSON() as { type?: string }).type === 'av_chat' &&
+            rejected < 2
+          ) {
+            rejected++;
+            await route.fulfill({
+              status: 429,
+              contentType: 'application/json',
+              body: JSON.stringify({ code: 'RATE_LIMITED', error: repeatedError }),
+            });
+          } else if (
+            request.method() === 'POST' &&
+            (request.postDataJSON() as { type?: string }).type === 'av_chat' &&
+            completedWithoutHistory === 0
+          ) {
+            // The request has completed, but its message is no longer in the latest history.
+            // Keep the response at the client boundary; do not manufacture server chat entries.
+            completedWithoutHistory++;
+            await route.fulfill({
+              status: 200,
+              contentType: 'application/json',
+              body: JSON.stringify({
+                type: 'result',
+                requestId: (request.postDataJSON() as { requestId: string }).requestId,
+              }),
+            });
+          } else await route.continue();
+        });
+        try {
+          for (let attempt = 1; attempt <= 2; attempt++) {
+            await chatter.getByTestId('av-chat-send').click();
+            await expect.poll(() => rejected).toBe(attempt);
+            await expect(chatter.locator('.connection-banner')).toContainText(repeatedError);
+            await expect(chatter.getByTestId('av-chat-input')).toHaveValue(message);
+            await expect(
+              chatter.getByTestId('av-chat-send'),
+              `same error retry ${attempt} restores submit`,
+            ).toBeEnabled();
+            await expect(chatter.getByTestId('av-chat-send')).toHaveText('보내기');
+            expect((await state(host)).chat).toHaveLength(0);
+          }
+          await chatter.getByTestId('av-chat-send').click();
+          await expect.poll(() => completedWithoutHistory).toBe(1);
+          await expect
+            .poll(() =>
+              chatter.evaluate(
+                () =>
+                  (JSON.parse(sessionStorage.getItem('atelier.pending') || '[]') as unknown[])
+                    .length,
+              ),
+            )
+            .toBe(0);
+          await expect(chatter.getByTestId('av-chat-send')).toBeEnabled();
+          await expect(chatter.getByTestId('av-chat-send')).toHaveText('보내기');
+          await expect(chatter.getByTestId('av-chat-input')).toHaveValue(message);
+          expect((await state(host)).chat).toHaveLength(0);
+        } finally {
+          await info.attach('local-chat-recovery', {
+            contentType: 'application/json',
+            body: JSON.stringify({
+              rejected,
+              completedWithoutHistory,
+              button: await chatter.getByTestId('av-chat-send').innerText(),
+              disabled: await chatter.getByTestId('av-chat-send').isDisabled(),
+              draftPreserved: (await chatter.getByTestId('av-chat-input').inputValue()) === message,
+              pendingCount: await chatter.evaluate(
+                () =>
+                  (JSON.parse(sessionStorage.getItem('atelier.pending') || '[]') as unknown[])
+                    .length,
+              ),
+            }),
+          });
+          await chatter.unroute(endpoint);
+        }
+      }
       await pages[2].getByTestId('av-chat-send').click();
       await expect(pages[2].getByTestId('av-chat-input')).toHaveValue('');
       await expect(host.getByTestId('av-chat-message').last()).toContainText(

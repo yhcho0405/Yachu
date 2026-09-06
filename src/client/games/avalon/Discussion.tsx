@@ -34,7 +34,6 @@ export default function Discussion({
     text: string;
     raw: string;
     seenIds: Set<string>;
-    oldError: string | null | undefined;
   } | null>(null);
   const [cooldown, setCooldown] = useState(false);
   const [unread, setUnread] = useState(false);
@@ -59,11 +58,10 @@ export default function Discussion({
     if (delivered) {
       setDraft((current) => (current === sending.raw ? '' : current));
       setSending(null);
-    } else if (
-      error &&
-      error !== sending.oldError &&
-      !queue.some((item) => item.intent.type === 'av_chat')
-    ) {
+    } else if (!queue.some((item) => item.intent.type === 'av_chat')) {
+      // Queue completion ends the local submission lifetime, even when an error repeats
+      // or the acknowledged message has already left the bounded public chat history.
+      // Only a visible server message above authorizes clearing the user's draft.
       setSending(null);
     }
   }, [room.chat, playerId, sending, queue, error]);
@@ -79,7 +77,6 @@ export default function Discussion({
       text,
       raw: draft,
       seenIds: new Set(room.chat.map((message) => message.id)),
-      oldError: error,
     });
     onIntent({ type: 'av_chat', text });
   };
