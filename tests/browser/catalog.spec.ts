@@ -2,8 +2,8 @@ import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 import type { RoomState, Session, YachtRoomState } from '../../src/shared/protocol';
 import type { TikatukaRoomState } from '../../src/shared/tikatuka';
 import { getCode } from './helpers';
+import { audioResources, expectOnlySharedMusic, observeAudio } from './audio-probe';
 
-type AudioProbeWindow = Window & { __catalogAudioContexts?: AudioContext[] };
 async function publicState(page: Page): Promise<RoomState> {
   const raw = await page.getByTestId('game-state').getAttribute('data-state');
   if (!raw) throw new Error('Missing public room snapshot');
@@ -34,25 +34,6 @@ async function noOverflow(page: Page) {
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1))
     .toBe(true);
 }
-async function audioStates(page: Page) {
-  return page.evaluate(() =>
-    ((window as AudioProbeWindow).__catalogAudioContexts ?? []).map((context) => context.state),
-  );
-}
-async function observeAudio(context: BrowserContext) {
-  // Observe browser resource lifetime only; the game's audio implementation is unchanged.
-  await context.addInitScript(() => {
-    const observed = window as AudioProbeWindow;
-    observed.__catalogAudioContexts = [];
-    const Original = window.AudioContext;
-    window.AudioContext = class extends Original {
-      constructor(options?: AudioContextOptions) {
-        super(options);
-        observed.__catalogAudioContexts!.push(this);
-      }
-    };
-  });
-}
 async function waitForTikaDecision(page: Page) {
   await expect(page.locator('[data-testid^="tika-target-"]:enabled').first()).toBeVisible();
 }
@@ -61,9 +42,7 @@ async function leave(page: Page) {
   await page.getByRole('dialog').getByRole('button', { name: '방 나가기', exact: true }).click();
   await expect(page.getByTestId('nickname-input')).toBeVisible();
   await expect(page.locator('canvas')).toHaveCount(0);
-  await expect
-    .poll(async () => (await audioStates(page)).every((state) => state === 'closed'))
-    .toBe(true);
+  await expectOnlySharedMusic(page);
 }
 const stableTika = (state: TikatukaRoomState) => ({
   gameType: state.gameType,
@@ -116,6 +95,7 @@ test('catalog preserves shared input/settings, releases game resources and isola
   page.on('request', observeScript);
   try {
     await page.goto('/');
+    expect(await audioResources(page)).toEqual([]);
     await page.getByTestId('nickname-input').fill('게임 전환 손님');
     await page.getByTestId('join-code').fill('ABCDEFGH');
     await page.getByRole('button', { name: '설정', exact: true }).click();
@@ -156,7 +136,7 @@ test('catalog preserves shared input/settings, releases game resources and isola
       ),
     ).toEqual([]);
     await expect(page.locator('canvas')).toHaveCount(0);
-    expect(await audioStates(page)).toEqual([]);
+    await expectOnlySharedMusic(page);
     page.off('request', observeScript);
 
     // First Yacht room, retaining the same nickname/settings across the whole sequence.
@@ -199,13 +179,16 @@ test('catalog preserves shared input/settings, releases game resources and isola
     expect(stableTika(independentServer.state)).toEqual(stableTika(independentBefore));
 
     const beforeBrowse = await yachtState(page);
-    await expect.poll(async () => (await audioStates(page)).length).toBeGreaterThan(0);
+    await expect
+      .poll(
+        async () =>
+          (await audioResources(page)).filter((record) => record.media.length === 0).length,
+      )
+      .toBeGreaterThan(0);
     await page.getByRole('button', { name: '게임 목록', exact: true }).click();
     await page.getByTestId('game-card-tikatuka').click();
     await expect(page.locator('canvas')).toHaveCount(0);
-    await expect
-      .poll(async () => (await audioStates(page)).every((state) => state === 'closed'))
-      .toBe(true);
+    await expectOnlySharedMusic(page);
     expect((await yachtState(page)).gameId).toBe(beforeBrowse.gameId);
     expect((await yachtState(page)).players[0].forfeited).toBe(false);
     expect((await yachtState(page)).players[0].connected).toBe(true);
@@ -235,9 +218,7 @@ test('catalog preserves shared input/settings, releases game resources and isola
     const tikaBeforeBrowse = await tikaState(page);
     await page.getByRole('button', { name: '게임 목록', exact: true }).click();
     await expect(page.locator('canvas')).toHaveCount(0);
-    await expect
-      .poll(async () => (await audioStates(page)).every((state) => state === 'closed'))
-      .toBe(true);
+    await expectOnlySharedMusic(page);
     await page.getByTestId('game-card-yacht').click();
     await page.getByTestId('resume-game').click();
     await waitForTikaDecision(page);

@@ -226,7 +226,7 @@ export default function YachtGame({
       document.removeEventListener('keydown', unlock);
     };
   }, [audio]);
-  useEffect(() => audio.setSettings(settings), [audio, settings]);
+  useEffect(() => audio.setSettings({ ...settings, music: 0 }), [audio, settings]);
   useEffect(() => {
     setTime(Date.now());
     if (!room || room.inputAfter <= Date.now()) return;

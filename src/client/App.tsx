@@ -15,6 +15,7 @@ import { GameCatalog, SelectedGameSummary } from './catalog';
 import { useSettings } from './settings';
 import SettingsPanel from './SettingsPanel';
 import Lobby, { ConnectionPolicy } from './Lobby';
+import { createMusic } from './music';
 
 const client = new GameClient();
 const YachtGame = lazy(() => import('./games/yacht/YachtGame'));
@@ -49,11 +50,32 @@ export default function App() {
   const [selectedGame, setSelectedGame] = useState<GameType>('yacht');
   const [browsing, setBrowsing] = useState(false);
   const [settings, setSettings] = useSettings();
+  const [music] = useState(createMusic);
   const [modal, setModal] = useState<'settings' | 'help' | 'leave' | 'switch' | null>(null);
   const [nextEntry, setNextEntry] = useState<Entry | null>(null);
   const [waitingToLeave, setWaitingToLeave] = useState(false);
   const [copied, setCopied] = useState(false);
   const previousRoom = useRef<string | null>(null);
+  const musicScene = !room || browsing || room.phase === 'lobby' ? 'lobby' : room.gameType;
+  useEffect(
+    () => music.setSettings({ muted: settings.muted, music: settings.music }),
+    [music, settings.muted, settings.music],
+  );
+  useEffect(() => music.setScene(musicScene), [music, musicScene]);
+  useEffect(() => {
+    const unlock = (event: Event) => {
+      if (!event.isTrusted) return;
+      void music.unlock().catch(() => {
+        // Keep the gesture listeners so a browser-blocked start can retry next time.
+      });
+    };
+    const gestures = ['pointerdown', 'touchend', 'click', 'keydown'] as const;
+    for (const gesture of gestures) document.addEventListener(gesture, unlock);
+    return () => {
+      for (const gesture of gestures) document.removeEventListener(gesture, unlock);
+      music.dispose();
+    };
+  }, [music]);
   useEffect(() => {
     void client.boot();
     return () => client.dispose();

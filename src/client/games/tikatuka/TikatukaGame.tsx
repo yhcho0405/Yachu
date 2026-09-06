@@ -105,7 +105,7 @@ export default function TikatukaGame({
       audio.dispose();
     };
   }, [audio]);
-  useEffect(() => audio.setSettings(settings), [audio, settings]);
+  useEffect(() => audio.setSettings({ ...settings, music: 0 }), [audio, settings]);
   useEffect(() => {
     setNow(Date.now());
     if (room.inputAfter <= Date.now()) return;

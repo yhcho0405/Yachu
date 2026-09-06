@@ -43,7 +43,7 @@ export default function SettingsPanel({
         <label>
           <span>
             <strong>배경 음악</strong>
-            <small>게임 중 재생되는 음악</small>
+            <small>로비와 게임에서 재생되는 음악</small>
           </span>
           <input
             aria-label="배경 음악 볼륨"
