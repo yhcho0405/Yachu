@@ -1,0 +1,101 @@
+{
+  "date": "2026-09-06T08:03:35.438Z",
+  "url": "http://127.0.0.1:8787",
+  "software": false,
+  "recording": false,
+  "browser": "153.0.8010.12",
+  "platform": "darwin",
+  "architecture": "arm64",
+  "viewport": {
+    "width": 1366,
+    "height": 900,
+    "dpr": 1
+  },
+  "gpu": {
+    "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+    "vendor": "Google Inc. (Apple)",
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)"
+  },
+  "preGestureAudioContexts": 0,
+  "signalBeforeMute": {
+    "rms": 0.0035169032552085735,
+    "peak": 0.006778803654015064
+  },
+  "signalAfterMute": {
+    "rms": 0,
+    "peak": 0
+  },
+  "hiddenTab": {
+    "hidden": false,
+    "audio": [
+      "running"
+    ]
+  },
+  "returnedTab": {
+    "hidden": false,
+    "audio": [
+      "running"
+    ],
+    "animating": "false"
+  },
+  "idleFramesPerSecond": 0,
+  "activeFrameCount": 132,
+  "medianRafDeltaMs": 8.300000000000182,
+  "p95RafDeltaMs": 9.199999999999818,
+  "medianCpuCallbackMs": 0.2999999523162842,
+  "p95CpuCallbackMs": 0.40000009536743164,
+  "sceneQuality": "1.75",
+  "directRaycastHold": true,
+  "mobileDirectHold": true,
+  "faceMatches": [
+    true,
+    true,
+    true,
+    true
+  ],
+  "mobile": {
+    "scrollWidth": 360,
+    "width": 360,
+    "canvas": {
+      "x": 20,
+      "y": 262,
+      "width": 320,
+      "height": 230.3984375,
+      "top": 262,
+      "right": 340,
+      "bottom": 492.3984375,
+      "left": 20
+    }
+  },
+  "reduced": {
+    "activeFrames": 0,
+    "settings": {
+      "muted": true,
+      "sfx": 0.55,
+      "music": 0.12,
+      "reducedMotion": true
+    },
+    "audio": [
+      {
+        "state": "running",
+        "sampleRate": 48000
+      }
+    ]
+  },
+  "reloaded": {
+    "canvases": 1,
+    "animating": "false",
+    "settings": {
+      "muted": true,
+      "sfx": 0.55,
+      "music": 0.12,
+      "reducedMotion": true
+    }
+  },
+  "contextLossSupported": true,
+  "contextRestored": {
+    "canvas": "[1,5,4,2,2]",
+    "error": null
+  },
+  "errors": []
+}

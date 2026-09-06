@@ -1,0 +1,38 @@
+{
+  "date": "2026-09-06T07:21:30.792Z",
+  "browser": "153.0.8010.12",
+  "viewport": {
+    "width": 1366,
+    "height": 900,
+    "dpr": 1
+  },
+  "headless": false,
+  "forcedGraphicsFlags": false,
+  "videoRecording": false,
+  "otherLoad": "Root was running a separate four-player software-rendered browser test concurrently.",
+  "gpu": {
+    "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)",
+    "vendor": "Google Inc. (Apple)"
+  },
+  "runs": [
+    {
+      "frames": 132,
+      "medianRafMs": 8.299999999999955,
+      "p95RafMs": 9.799999999999955,
+      "medianCallbackCpuMs": 0.3000001907348633,
+      "p95CallbackCpuMs": 0.5,
+      "quality": "1.75",
+      "facesMatch": true
+    },
+    {
+      "frames": 133,
+      "medianRafMs": 8.300000000000182,
+      "p95RafMs": 10,
+      "medianCallbackCpuMs": 0.2999999523162842,
+      "p95CallbackCpuMs": 0.40000009536743164,
+      "quality": "1.75",
+      "facesMatch": true
+    }
+  ]
+}

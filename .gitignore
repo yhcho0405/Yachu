@@ -1,0 +1,14 @@
+node_modules/
+dist/
+dist-worker/
+.wrangler/
+.dev.vars
+.env*
+!.env.example
+playwright-report/
+test-results/
+*.log
+.DS_Store
+src/shared/build.ts
+public/version.json
+work/
