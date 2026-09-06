@@ -1,7 +1,7 @@
 import { test, expect, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import { getTikatukaTargets, type TikatukaRoomState } from '../../src/shared/tikatuka';
 import type { RoomState } from '../../src/shared/protocol';
-import { getCode } from './helpers';
+import { getCode, expectInViewport } from './helpers';
 
 async function state(page: Page): Promise<TikatukaRoomState> {
   const raw = await page.getByTestId('game-state').getAttribute('data-state');
@@ -112,6 +112,19 @@ for (const solo of [false, true])
     let shield = false;
     try {
       let current = await agree(game.pages);
+      if (current.turnPlayerId === game.ids[0] && current.stage === 'placing') {
+        const target = getTikatukaTargets(current)[0];
+        const seat = current.players.find((player) => player.id === target.ownerId)!.seat;
+        await game.pages[0].getByTestId(`tika-target-${seat}-${target.lane}`).click();
+        await expect(game.pages[0].getByTestId('tika-confirm')).toBeEnabled();
+        await expectInViewport(game.pages[0], [
+          '.tikatuka-board-viewport',
+          '.tika-status',
+          '.tika-panel',
+          '[data-testid="tika-confirm"]',
+          '.tika-scoreboard',
+        ]);
+      }
       await game.pages[0].screenshot({
         path: info.outputPath(`tikatuka-${solo ? 'computer' : 'online'}-start.png`),
         fullPage: true,

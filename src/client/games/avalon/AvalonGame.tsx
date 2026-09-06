@@ -192,7 +192,7 @@ export default function AvalonGame({
             : actions.canVote
               ? '찬성 또는 반대를 선택한 뒤 최종 제출하세요.'
               : actions.canSubmitQuest
-                ? '원정 카드를 선택한 뒤 제출하세요. 카드 작성자는 공개되지 않습니다.'
+                ? '카드를 고른 뒤 제출하세요.'
                 : actions.canUseLady
                   ? '조사할 사람을 선택한 뒤 확인하세요. 이미 사용한 사람은 조사할 수 없습니다.'
                   : actions.canAssassinate
@@ -216,409 +216,422 @@ export default function AvalonGame({
           : null;
   return (
     <div className="avalon-game" data-testid="avalon-game" data-stage={room.stage}>
-      <section className="avalon-status" aria-label="현재 진행" aria-live="polite">
-        <div className="avalon-phase-heading">
-          <span className="avalon-kicker">{Math.min(5, room.questNumber)}번째 원정</span>
-          <h2 data-testid="av-stage">{STAGES[room.stage]}</h2>
-          <p>{progress}</p>
-        </div>
-        <div className="avalon-status-owner">
-          <span>행동할 사람</span>
-          <strong>{acting}</strong>
-        </div>
-        <div className="avalon-status-task">
-          <span>내가 할 일</span>
-          <p data-testid="av-instruction">{instruction}</p>
-        </div>
-      </section>
-      {latestSummary && (
-        <div className="avalon-latest" role="status">
-          {latestSummary}
-        </div>
-      )}
-      <div className="avalon-tracks">
-        <ol className="avalon-quest-track" aria-label="다섯 원정 기록">
-          {[1, 2, 3, 4, 5].map((number) => {
-            const quest = room.history.quests.find((value) => value.questNumber === number);
-            return (
-              <li
-                key={number}
-                className={`${quest ? (quest.failed ? 'failed' : 'succeeded') : ''} ${room.questNumber === number && room.phase === 'playing' ? 'current' : ''}`}
-              >
-                <span>{number}원정</span>
-                <strong>
-                  {quest
-                    ? quest.failed
-                      ? '× 실패'
-                      : '✓ 성공'
-                    : `${getAvalonQuestSize(room.players.length, number)}명`}
-                </strong>
-                <small>
-                  {getAvalonFailThreshold(room.players.length, number) === 2
-                    ? '실패 2장 필요'
-                    : quest
-                      ? `${quest.successCount}성공 · ${quest.failCount}실패`
-                      : '실패 1장 필요'}
-                </small>
-              </li>
-            );
-          })}
-        </ol>
-        <div className="avalon-rejections">
-          <span>
-            연속 부결 <b>{room.rejections}/5</b>
-          </span>
-          <div aria-hidden="true">
-            {[1, 2, 3, 4, 5].map((value) => (
-              <i key={value} className={value <= room.rejections ? 'filled' : ''} />
-            ))}
+      <div className="avalon-core" data-testid="av-core">
+        <section className="avalon-status" aria-label="현재 진행" aria-live="polite">
+          <div className="avalon-phase-heading">
+            <span className="avalon-kicker">{Math.min(5, room.questNumber)}번째 원정</span>
+            <h2 data-testid="av-stage">{STAGES[room.stage]}</h2>
           </div>
-          <small>
-            {room.phase === 'finished'
-              ? '최종 기록'
-              : `${5 - room.rejections}회 더 부결되면 악 승리`}
-          </small>
+          <div className="avalon-status-owner">
+            <span>행동할 사람</span>
+            <strong>{acting}</strong>
+          </div>
+          <div className="avalon-status-task">
+            <span>{latestSummary ? '최근 결과' : '진행 상황'}</span>
+            <p className={latestSummary ? 'avalon-latest-summary' : ''}>
+              {latestSummary ?? progress}
+            </p>
+          </div>
+        </section>
+        <div className="avalon-tracks">
+          <ol className="avalon-quest-track" aria-label="다섯 원정 기록">
+            {[1, 2, 3, 4, 5].map((number) => {
+              const quest = room.history.quests.find((value) => value.questNumber === number);
+              return (
+                <li
+                  key={number}
+                  className={`${quest ? (quest.failed ? 'failed' : 'succeeded') : ''} ${room.questNumber === number && room.phase === 'playing' ? 'current' : ''}`}
+                >
+                  <span>{number}원정</span>
+                  <strong>
+                    {quest
+                      ? quest.failed
+                        ? '× 실패'
+                        : '✓ 성공'
+                      : `${getAvalonQuestSize(room.players.length, number)}명`}
+                  </strong>
+                  <small>
+                    {getAvalonFailThreshold(room.players.length, number) === 2
+                      ? '실패 2장 필요'
+                      : quest
+                        ? `${quest.successCount}성공 · ${quest.failCount}실패`
+                        : '실패 1장 필요'}
+                  </small>
+                </li>
+              );
+            })}
+          </ol>
+          <div className="avalon-rejections">
+            <span>
+              연속 부결 <b>{room.rejections}/5</b>
+            </span>
+            <div aria-hidden="true">
+              {[1, 2, 3, 4, 5].map((value) => (
+                <i key={value} className={value <= room.rejections ? 'filled' : ''} />
+              ))}
+            </div>
+            <small>
+              {room.phase === 'finished'
+                ? '최종 기록'
+                : `${5 - room.rejections}회 더 부결되면 악 승리`}
+            </small>
+          </div>
         </div>
-      </div>
-      <nav className="avalon-jump-links" aria-label="경기 화면 이동">
-        <a href="#avalon-action">조작</a>
-        <a href="#avalon-discussion">토론</a>
-        <a href="#avalon-history">기록</a>
-      </nav>
-      <div className="avalon-layout">
-        <div className="avalon-board-area">
-          <AvalonBoard
-            room={publicState}
-            viewerId={session.playerId}
-            selectedIds={selectedIds}
-            focusedId={focusedId}
-            interactive={connected}
-            reducedMotion={settings.reducedMotion}
-            online={connected}
-            audio={audio}
-            onSeatClick={selectSeat}
-          />
-          <details className="avalon-seat-details" data-testid="av-seat-details">
-            <summary>좌석 상세 상태 · {room.players.length}명</summary>
-            <div className="avalon-seat-list" aria-label="좌석과 공개 상태">
-              {room.players.map((participant) => {
-                const team = room.proposal?.teamIds.includes(participant.id);
-                const submitted = submittedIds.includes(participant.id);
-                const expected = room.stage === 'vote' || (room.stage === 'quest' && team);
-                const selected = selectedIds.includes(participant.id);
-                return (
-                  <button
-                    key={participant.id}
-                    data-testid={`av-seat-${participant.seat}`}
-                    className={`avalon-seat ${selected ? 'selected' : ''} ${focusedId === participant.id ? 'focused' : ''}`}
-                    aria-pressed={selected}
-                    onClick={() => selectSeat(participant.id)}
-                    title={participant.nickname}
-                  >
-                    <span className="avalon-seat-number">{participant.seat + 1}</span>
-                    <span className="avalon-seat-description">
-                      <strong>
-                        {participant.nickname}
-                        {participant.id === session.playerId && <small>나</small>}
-                      </strong>
-                      <span>
-                        {room.leaderId === participant.id && <b>대장</b>}
-                        {team && <b>원정대원</b>}
-                        {room.lady?.holderId === participant.id && <b>호수의 여인</b>}
-                        {!participant.connected && <em>연결 끊김</em>}
-                        {expected && (
-                          <em className={submitted ? 'submitted' : ''}>
-                            {submitted ? '✓ 제출 완료' : '제출 대기'}
-                          </em>
-                        )}
-                        {selected && room.stage === 'team' && <em>선택 초안</em>}
+        <div className="avalon-layout">
+          <div className="avalon-board-area">
+            <AvalonBoard
+              room={publicState}
+              viewerId={session.playerId}
+              selectedIds={selectedIds}
+              focusedId={focusedId}
+              interactive={connected}
+              reducedMotion={settings.reducedMotion}
+              online={connected}
+              audio={audio}
+              onSeatClick={selectSeat}
+            />
+            <details className="avalon-seat-details" data-testid="av-seat-details">
+              <summary>좌석 상세 상태 · {room.players.length}명</summary>
+              <div className="avalon-seat-list" aria-label="좌석과 공개 상태">
+                {room.players.map((participant) => {
+                  const team = room.proposal?.teamIds.includes(participant.id);
+                  const submitted = submittedIds.includes(participant.id);
+                  const expected = room.stage === 'vote' || (room.stage === 'quest' && team);
+                  const selected = selectedIds.includes(participant.id);
+                  return (
+                    <button
+                      key={participant.id}
+                      data-testid={`av-seat-${participant.seat}`}
+                      className={`avalon-seat ${selected ? 'selected' : ''} ${focusedId === participant.id ? 'focused' : ''}`}
+                      aria-pressed={selected}
+                      onClick={() => selectSeat(participant.id)}
+                      title={participant.nickname}
+                    >
+                      <span className="avalon-seat-number">{participant.seat + 1}</span>
+                      <span className="avalon-seat-description">
+                        <strong>
+                          {participant.nickname}
+                          {participant.id === session.playerId && <small>나</small>}
+                        </strong>
+                        <span>
+                          {room.leaderId === participant.id && <b>대장</b>}
+                          {team && <b>원정대원</b>}
+                          {room.lady?.holderId === participant.id && <b>호수의 여인</b>}
+                          {!participant.connected && <em>연결 끊김</em>}
+                          {expected && (
+                            <em className={submitted ? 'submitted' : ''}>
+                              {submitted ? '✓ 제출 완료' : '제출 대기'}
+                            </em>
+                          )}
+                          {selected && room.stage === 'team' && <em>선택 초안</em>}
+                        </span>
                       </span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </details>
-        </div>
-        <section id="avalon-action" className="avalon-action avalon-panel" aria-label="나의 조작">
-          <div className="avalon-panel-heading">
-            <div>
-              <span className="avalon-kicker">나의 조작</span>
-              <h2>{room.phase === 'finished' ? '경기 결과' : STAGES[room.stage]}</h2>
-            </div>
-            {(room.stage === 'vote' || room.stage === 'quest') && (
-              <span className="avalon-counter" data-testid="av-submission-count">
-                {submittedIds.length}/{participants.length} 제출
-              </span>
-            )}
+                    </button>
+                  );
+                })}
+              </div>
+            </details>
           </div>
-          <p className="avalon-action-instruction">{instruction}</p>
-          {room.stage === 'team' && (
-            <>
-              <div className="avalon-team-selection">
-                <strong>
-                  {actions.canSelectTeam
-                    ? `선택 초안 ${teamDraft.length}/${needed}명`
-                    : `대장이 ${needed}명을 선택 중`}
-                </strong>
-                {actions.canSelectTeam && (
-                  <div>
-                    {teamDraft.map((id) => (
-                      <button key={id} onClick={() => selectSeat(id)} disabled={!ready}>
-                        {player(id)?.seat !== undefined ? `${player(id)!.seat + 1}번 ` : ''}
-                        {player(id)?.nickname} ×
+          <aside className="avalon-side">
+            <section
+              id="avalon-action"
+              className="avalon-action avalon-panel"
+              aria-label="나의 조작"
+            >
+              <div className="avalon-panel-heading">
+                <div>
+                  <h2>{room.phase === 'finished' ? '경기 결과' : '나의 조작'}</h2>
+                </div>
+                {(room.stage === 'vote' || room.stage === 'quest') && (
+                  <span className="avalon-counter" data-testid="av-submission-count">
+                    {submittedIds.length}/{participants.length} 제출
+                  </span>
+                )}
+              </div>
+              <p className="avalon-action-instruction" data-testid="av-instruction">
+                {instruction}
+              </p>
+              {room.stage === 'team' && (
+                <>
+                  <div className="avalon-team-selection">
+                    <strong>
+                      {actions.canSelectTeam
+                        ? `선택 초안 ${teamDraft.length}/${needed}명`
+                        : `대장이 ${needed}명을 선택 중`}
+                    </strong>
+                    {actions.canSelectTeam && (
+                      <div>
+                        {teamDraft.map((id) => (
+                          <button key={id} onClick={() => selectSeat(id)} disabled={!ready}>
+                            {player(id)?.seat !== undefined ? `${player(id)!.seat + 1}번 ` : ''}
+                            {player(id)?.nickname} ×
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {actions.canSelectTeam && (
+                    <div className="avalon-confirm-row">
+                      <p>확정하면 모든 사람에게 원정대가 공개되고 투표를 시작합니다.</p>
+                      <button
+                        className="button primary"
+                        data-testid="av-team-confirm"
+                        disabled={!ready || teamDraft.length !== needed}
+                        onClick={() =>
+                          send({ ...envelope, type: 'av_team', teamIds: [...teamDraft] })
+                        }
+                      >
+                        원정대 확정 · {teamDraft.length}/{needed}
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+              {room.proposal && (room.stage === 'vote' || room.stage === 'quest') && (
+                <div className="avalon-confirmed-team">
+                  <span>확정 원정대</span>
+                  {room.proposal.teamIds.map((id) => (
+                    <button key={id} className="avalon-person-link" onClick={() => focus(id)}>
+                      {player(id)?.seat !== undefined ? `${player(id)!.seat + 1}번 ` : ''}
+                      {player(id)?.nickname}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {room.stage === 'vote' && actions.canVote && (
+                <>
+                  <div className="avalon-choice-pair">
+                    {([true, false] as const).map((approve) => (
+                      <button
+                        key={String(approve)}
+                        data-testid={approve ? 'av-vote-approve' : 'av-vote-reject'}
+                        className={voteDraft === approve ? 'chosen' : ''}
+                        aria-pressed={voteDraft === approve}
+                        disabled={!ready}
+                        onClick={() => {
+                          setVoteDraft(approve);
+                          audio.play('select');
+                        }}
+                      >
+                        <b>{approve ? '✓' : '×'}</b>
+                        <strong>{approve ? '찬성' : '반대'}</strong>
                       </button>
                     ))}
                   </div>
-                )}
-              </div>
-              {actions.canSelectTeam && (
-                <div className="avalon-confirm-row">
-                  <p>확정하면 모든 사람에게 원정대가 공개되고 투표를 시작합니다.</p>
-                  <button
-                    className="button primary"
-                    data-testid="av-team-confirm"
-                    disabled={!ready || teamDraft.length !== needed}
-                    onClick={() => send({ ...envelope, type: 'av_team', teamIds: [...teamDraft] })}
-                  >
-                    원정대 확정 · {teamDraft.length}/{needed}
-                  </button>
+                  <div className="avalon-confirm-row">
+                    <p>비밀 투표입니다. 제출 후에는 바꿀 수 없습니다.</p>
+                    <button
+                      className="button primary"
+                      data-testid="av-vote-submit"
+                      disabled={!ready || voteDraft === null}
+                      onClick={() => {
+                        if (voteDraft !== null)
+                          send({ ...envelope, type: 'av_vote', approve: voteDraft });
+                      }}
+                    >
+                      {voteDraft === null
+                        ? '찬반을 선택하세요'
+                        : `${voteDraft ? '찬성' : '반대'} 제출`}
+                    </button>
+                  </div>
+                </>
+              )}
+              {room.stage === 'quest' && actions.canSubmitQuest && (
+                <>
+                  <p className="avalon-rule-note">
+                    실패 카드 {failThreshold}장 이상이면 원정 실패
+                    {failThreshold === 2 && ' · 7인 이상 4번째 원정'}
+                  </p>
+                  <div className="avalon-choice-pair">
+                    {(['success', 'fail'] as const).map((card) => (
+                      <button
+                        key={card}
+                        data-testid={`av-card-${card}`}
+                        className={cardDraft === card ? 'chosen' : ''}
+                        aria-pressed={cardDraft === card}
+                        disabled={!ready || !actions.questCards.includes(card)}
+                        aria-describedby={
+                          card === 'fail' && !actions.questCards.includes(card)
+                            ? 'avalon-good-card-policy'
+                            : undefined
+                        }
+                        onClick={() => {
+                          setCardDraft(card);
+                          audio.play('select');
+                        }}
+                      >
+                        <b>{card === 'success' ? '◇' : '◆'}</b>
+                        <strong>{card === 'success' ? '성공' : '실패'} 카드</strong>
+                      </button>
+                    ))}
+                  </div>
+                  {ownInfo?.alignment === 'good' && (
+                    <p id="avalon-good-card-policy" className="avalon-subtle">
+                      선 진영은 성공 카드만 제출할 수 있습니다.
+                    </p>
+                  )}
+                  <div className="avalon-confirm-row">
+                    <p>익명 카드입니다. 제출 후에는 바꿀 수 없습니다.</p>
+                    <button
+                      className="button primary"
+                      data-testid="av-card-submit"
+                      disabled={!ready || !cardDraft}
+                      onClick={() => {
+                        if (cardDraft) send({ ...envelope, type: 'av_quest', card: cardDraft });
+                      }}
+                    >
+                      {cardDraft
+                        ? `${cardDraft === 'success' ? '성공' : '실패'} 카드 제출`
+                        : '카드를 선택하세요'}
+                    </button>
+                  </div>
+                </>
+              )}
+              {actions.submitted && (room.stage === 'vote' || room.stage === 'quest') && (
+                <div className="avalon-submitted" data-testid="av-submitted">
+                  <b>✓ 제출 완료</b>
+                  <p>
+                    {room.stage === 'vote' && ownInfo && ownInfo.myVote !== null
+                      ? `내 투표: ${ownInfo?.myVote ? '찬성' : '반대'} · 내 화면에만 표시`
+                      : '원정 카드 제출을 마쳤습니다. 다른 참가자에게는 카드 종류를 표시하지 않습니다.'}
+                  </p>
+                  <small>전원 제출 후 결과가 함께 공개됩니다.</small>
                 </div>
               )}
-            </>
-          )}
-          {room.proposal && (room.stage === 'vote' || room.stage === 'quest') && (
-            <div className="avalon-confirmed-team">
-              <span>확정 원정대</span>
-              {room.proposal.teamIds.map((id) => (
-                <button key={id} className="avalon-person-link" onClick={() => focus(id)}>
-                  {player(id)?.seat !== undefined ? `${player(id)!.seat + 1}번 ` : ''}
-                  {player(id)?.nickname}
-                </button>
-              ))}
-            </div>
-          )}
-          {room.stage === 'vote' && actions.canVote && (
-            <>
-              <div className="avalon-choice-pair">
-                {([true, false] as const).map((approve) => (
-                  <button
-                    key={String(approve)}
-                    data-testid={approve ? 'av-vote-approve' : 'av-vote-reject'}
-                    className={voteDraft === approve ? 'chosen' : ''}
-                    aria-pressed={voteDraft === approve}
-                    disabled={!ready}
-                    onClick={() => {
-                      setVoteDraft(approve);
-                      audio.play('select');
-                    }}
-                  >
-                    <b>{approve ? '✓' : '×'}</b>
-                    <strong>{approve ? '찬성' : '반대'}</strong>
-                    <span>{approve ? '이 원정대로 출발' : '다시 구성 요청'}</span>
-                  </button>
-                ))}
-              </div>
-              <div className="avalon-confirm-row">
-                <p>선택은 나만 볼 수 있습니다. 제출 후에는 바꿀 수 없습니다.</p>
-                <button
-                  className="button primary"
-                  data-testid="av-vote-submit"
-                  disabled={!ready || voteDraft === null}
-                  onClick={() => {
-                    if (voteDraft !== null)
-                      send({ ...envelope, type: 'av_vote', approve: voteDraft });
-                  }}
-                >
-                  {voteDraft === null ? '찬반을 선택하세요' : `${voteDraft ? '찬성' : '반대'} 제출`}
-                </button>
-              </div>
-            </>
-          )}
-          {room.stage === 'quest' && actions.canSubmitQuest && (
-            <>
-              <p className="avalon-rule-note">
-                이번 원정은 실패 카드 {failThreshold}장 이상이면 실패합니다.
-                {failThreshold === 2 && ' 7인 이상 4번째 원정의 특별 기준입니다.'}
-              </p>
-              <div className="avalon-choice-pair">
-                {(['success', 'fail'] as const).map((card) => (
-                  <button
-                    key={card}
-                    data-testid={`av-card-${card}`}
-                    className={cardDraft === card ? 'chosen' : ''}
-                    aria-pressed={cardDraft === card}
-                    disabled={!ready || !actions.questCards.includes(card)}
-                    aria-describedby={
-                      card === 'fail' && !actions.questCards.includes(card)
-                        ? 'avalon-good-card-policy'
-                        : undefined
-                    }
-                    onClick={() => {
-                      setCardDraft(card);
-                      audio.play('select');
-                    }}
-                  >
-                    <b>{card === 'success' ? '◇' : '◆'}</b>
-                    <strong>{card === 'success' ? '성공' : '실패'} 카드</strong>
-                    <span>{card === 'success' ? '원정 성공에 기여' : '원정 실패에 기여'}</span>
-                  </button>
-                ))}
-              </div>
-              {ownInfo?.alignment === 'good' && (
-                <p id="avalon-good-card-policy" className="avalon-subtle">
-                  선 진영은 성공 카드만 제출할 수 있습니다.
-                </p>
+              {(actions.canUseLady || actions.canAssassinate) && (
+                <>
+                  <div className="avalon-target-selection">
+                    <span>
+                      {targetDraft ? '선택한 대상' : '보드나 좌석 목록에서 대상을 고르세요'}
+                    </span>
+                    {targetDraft && (
+                      <strong>
+                        {player(targetDraft)?.seat !== undefined
+                          ? `${player(targetDraft)!.seat + 1}번 `
+                          : ''}
+                        {player(targetDraft)?.nickname}
+                      </strong>
+                    )}
+                  </div>
+                  {actions.canUseLady && (
+                    <p className="avalon-subtle">
+                      자신과 이미 호수의 여인을 사용한 사람은 대상에서 제외됩니다. 진영만 확인하며
+                      역할명은 알 수 없습니다.
+                    </p>
+                  )}
+                  <div className="avalon-confirm-row">
+                    <p>
+                      {actions.canAssassinate
+                        ? '확정하면 암살 판정으로 경기가 끝납니다. 대상을 다시 확인하세요.'
+                        : '확인한 진영은 나만 보고, 토큰은 조사한 사람에게 넘어갑니다.'}
+                    </p>
+                    <button
+                      className={`button ${actions.canAssassinate ? 'danger' : 'primary'}`}
+                      data-testid={
+                        actions.canAssassinate ? 'av-assassinate-confirm' : 'av-lady-confirm'
+                      }
+                      disabled={!ready || !targetDraft}
+                      onClick={() => {
+                        if (targetDraft)
+                          send({
+                            ...envelope,
+                            type: actions.canAssassinate ? 'av_assassinate' : 'av_lady',
+                            targetId: targetDraft,
+                          });
+                      }}
+                    >
+                      {actions.canAssassinate ? '암살 대상 확정' : '진영 확인'}
+                    </button>
+                  </div>
+                </>
               )}
-              <div className="avalon-confirm-row">
-                <p>카드 작성자는 공개되지 않습니다. 제출 후에는 바꿀 수 없습니다.</p>
-                <button
-                  className="button primary"
-                  data-testid="av-card-submit"
-                  disabled={!ready || !cardDraft}
-                  onClick={() => {
-                    if (cardDraft) send({ ...envelope, type: 'av_quest', card: cardDraft });
-                  }}
-                >
-                  {cardDraft
-                    ? `${cardDraft === 'success' ? '성공' : '실패'} 카드 제출`
-                    : '카드를 선택하세요'}
-                </button>
-              </div>
-            </>
-          )}
-          {actions.submitted && (room.stage === 'vote' || room.stage === 'quest') && (
-            <div className="avalon-submitted" data-testid="av-submitted">
-              <b>✓ 제출 완료</b>
-              <p>
-                {room.stage === 'vote' && ownInfo && ownInfo.myVote !== null
-                  ? `내 투표: ${ownInfo?.myVote ? '찬성' : '반대'} · 내 화면에만 표시`
-                  : '원정 카드 제출을 마쳤습니다. 다른 참가자에게는 카드 종류를 표시하지 않습니다.'}
-              </p>
-              <small>전원 제출 후 결과가 함께 공개됩니다.</small>
-            </div>
-          )}
-          {(actions.canUseLady || actions.canAssassinate) && (
-            <>
-              <div className="avalon-target-selection">
-                <span>{targetDraft ? '선택한 대상' : '보드나 좌석 목록에서 대상을 고르세요'}</span>
-                {targetDraft && (
-                  <strong>
-                    {player(targetDraft)?.seat !== undefined
-                      ? `${player(targetDraft)!.seat + 1}번 `
-                      : ''}
-                    {player(targetDraft)?.nickname}
-                  </strong>
-                )}
-              </div>
-              {actions.canUseLady && (
-                <p className="avalon-subtle">
-                  자신과 이미 호수의 여인을 사용한 사람은 대상에서 제외됩니다. 진영만 확인하며
-                  역할명은 알 수 없습니다.
-                </p>
-              )}
-              <div className="avalon-confirm-row">
-                <p>
-                  {actions.canAssassinate
-                    ? '확정하면 암살 판정으로 경기가 끝납니다. 대상을 다시 확인하세요.'
-                    : '확인한 진영은 나만 보고, 토큰은 조사한 사람에게 넘어갑니다.'}
-                </p>
-                <button
-                  className={`button ${actions.canAssassinate ? 'danger' : 'primary'}`}
-                  data-testid={
-                    actions.canAssassinate ? 'av-assassinate-confirm' : 'av-lady-confirm'
-                  }
-                  disabled={!ready || !targetDraft}
-                  onClick={() => {
-                    if (targetDraft)
-                      send({
-                        ...envelope,
-                        type: actions.canAssassinate ? 'av_assassinate' : 'av_lady',
-                        targetId: targetDraft,
-                      });
-                  }}
-                >
-                  {actions.canAssassinate ? '암살 대상 확정' : '진영 확인'}
-                </button>
-              </div>
-            </>
-          )}
-          {room.phase === 'finished' && (
-            <div className="avalon-results" data-testid="av-results">
-              <h3>{room.winner ? `${room.winner === 'good' ? '선' : '악'} 승리` : '무효 종료'}</h3>
-              <p>{room.finishReason ? REASONS[room.finishReason] : '경기가 종료되었습니다.'}</p>
-              <div className="avalon-result-counts">
-                <span>
-                  원정 성공 <b>{successes}</b>
-                </span>
-                <span>
-                  원정 실패 <b>{failures}</b>
-                </span>
-              </div>
-              {room.revealedRoles.length > 0 && (
-                <div className="avalon-role-reveal" data-testid="av-role-reveal">
-                  {room.players.map((participant) => {
-                    const revealed = room.revealedRoles.find(
-                      (role) => role.playerId === participant.id,
-                    );
-                    return revealed ? (
-                      <div key={participant.id}>
-                        <span>
-                          {participant.seat + 1}번 {participant.nickname}
-                        </span>
-                        <strong>{AVALON_ROLE_LABELS[revealed.role]}</strong>
-                        <small>{revealed.alignment === 'good' ? '선' : '악'}</small>
-                      </div>
-                    ) : null;
-                  })}
+              {room.phase === 'finished' && (
+                <div className="avalon-results" data-testid="av-results">
+                  <h3>
+                    {room.winner ? `${room.winner === 'good' ? '선' : '악'} 승리` : '무효 종료'}
+                  </h3>
+                  <p>{room.finishReason ? REASONS[room.finishReason] : '경기가 종료되었습니다.'}</p>
+                  <div className="avalon-result-counts">
+                    <span>
+                      원정 성공 <b>{successes}</b>
+                    </span>
+                    <span>
+                      원정 실패 <b>{failures}</b>
+                    </span>
+                  </div>
+                  {room.revealedRoles.length > 0 && (
+                    <div className="avalon-role-reveal" data-testid="av-role-reveal">
+                      {room.players.map((participant) => {
+                        const revealed = room.revealedRoles.find(
+                          (role) => role.playerId === participant.id,
+                        );
+                        return revealed ? (
+                          <div key={participant.id}>
+                            <span>
+                              {participant.seat + 1}번 {participant.nickname}
+                            </span>
+                            <strong>{AVALON_ROLE_LABELS[revealed.role]}</strong>
+                            <small>{revealed.alignment === 'good' ? '선' : '악'}</small>
+                          </div>
+                        ) : null;
+                      })}
+                    </div>
+                  )}
+                  {session.playerId === room.hostId ? (
+                    <button
+                      className="button primary"
+                      data-testid="rematch"
+                      disabled={!connected || gamePending}
+                      onClick={() => onIntent({ type: 'rematch' })}
+                    >
+                      같은 방에서 다시 하기
+                    </button>
+                  ) : (
+                    <p className="avalon-subtle">방장이 재경기를 열면 다시 준비할 수 있습니다.</p>
+                  )}
                 </div>
               )}
-              {session.playerId === room.hostId ? (
-                <button
-                  className="button primary"
-                  data-testid="rematch"
-                  disabled={!connected || gamePending}
-                  onClick={() => onIntent({ type: 'rematch' })}
-                >
-                  같은 방에서 다시 하기
-                </button>
-              ) : (
-                <p className="avalon-subtle">방장이 재경기를 열면 다시 준비할 수 있습니다.</p>
+              {(room.stage === 'vote' || room.stage === 'quest') && awaiting.length > 0 && (
+                <details className="avalon-awaiting">
+                  <summary>미제출 {awaiting.length}명 확인</summary>
+                  <div>
+                    {awaiting.map((id) => (
+                      <button key={id} className="avalon-person-link" onClick={() => focus(id)}>
+                        {player(id)?.nickname}
+                      </button>
+                    ))}
+                  </div>
+                </details>
               )}
+            </section>
+            <div className="avalon-private-area">
+              <PrivateInfo
+                key={room.gameId}
+                room={room}
+                playerId={session.playerId}
+                onFocus={focus}
+              />
             </div>
-          )}
-          {(room.stage === 'vote' || room.stage === 'quest') && awaiting.length > 0 && (
-            <div className="avalon-awaiting">
-              <span>아직 제출하지 않은 사람</span>
-              <div>
-                {awaiting.map((id) => (
-                  <button key={id} className="avalon-person-link" onClick={() => focus(id)}>
-                    {player(id)?.nickname}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </section>
-        <div className="avalon-private-area">
-          <PrivateInfo key={room.gameId} room={room} playerId={session.playerId} onFocus={focus} />
-        </div>
-        <div id="avalon-discussion" className="avalon-discussion-area">
-          <Discussion
-            room={publicState}
-            playerId={session.playerId}
-            connected={connected}
-            queue={queue}
-            error={error}
-            focusedId={focusedId}
-            onFocus={focus}
-            onIntent={onIntent}
-          />
-        </div>
-        <div id="avalon-history" className="avalon-history-area">
-          <History room={publicState} onFocus={focus} />
+          </aside>
+          <div id="avalon-discussion" className="avalon-discussion-area">
+            <Discussion
+              compact
+              room={publicState}
+              playerId={session.playerId}
+              connected={connected}
+              queue={queue}
+              error={error}
+              focusedId={focusedId}
+              onFocus={focus}
+              onIntent={onIntent}
+            />
+          </div>
         </div>
       </div>
+      <details id="avalon-history" className="avalon-history-area avalon-history-details">
+        <summary>경기 기록 · 투표 비교와 원정 결과</summary>
+        <History room={publicState} onFocus={focus} />
+      </details>
     </div>
   );
 }

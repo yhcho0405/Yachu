@@ -11,6 +11,7 @@ export const SIGNAL_LABELS: Record<AvalonSignalKind, string> = {
   agree: '동의',
 };
 export default function Discussion({
+  compact = false,
   room,
   playerId,
   connected,
@@ -20,6 +21,7 @@ export default function Discussion({
   onFocus,
   onIntent,
 }: {
+  compact?: boolean;
   room: AvalonPublicState;
   playerId: string;
   connected: boolean;
@@ -29,6 +31,7 @@ export default function Discussion({
   onFocus: (id: string) => void;
   onIntent: (intent: Intent) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState<{
     text: string;
@@ -87,14 +90,30 @@ export default function Discussion({
     cooldownTimer.current = setTimeout(() => setCooldown(false), 1600);
   };
   const recent = room.signals.slice(-5);
+  const compactView = compact && !expanded;
+  const visibleMessages = compactView ? room.chat.slice(-2) : room.chat;
   return (
-    <section className="avalon-discussion avalon-panel" aria-label="공개 토론">
+    <section
+      className={`avalon-discussion avalon-panel ${compactView ? 'is-compact' : ''}`}
+      aria-label="공개 토론"
+    >
       <div className="avalon-panel-heading">
         <div>
           <span className="avalon-kicker">모두에게 공개</span>
-          <h2>토론</h2>
+          <h2>공개 토론</h2>
         </div>
-        <span className="avalon-counter">{room.players.length}명</span>
+        {compact ? (
+          <button
+            className="avalon-discussion-expand"
+            data-testid="av-discussion-expand"
+            aria-expanded={expanded}
+            onClick={() => setExpanded((value) => !value)}
+          >
+            {expanded ? '간단히 보기' : '대화·의견 전체'}
+          </button>
+        ) : (
+          <span className="avalon-counter">{room.players.length}명</span>
+        )}
       </div>
       <div
         className="avalon-chat-log"
@@ -115,7 +134,7 @@ export default function Discussion({
         {room.chat.length === 0 ? (
           <p className="avalon-chat-empty">원정대 구성과 투표 이유를 이야기해 보세요.</p>
         ) : (
-          room.chat.map((message) => (
+          visibleMessages.map((message) => (
             <article
               className={`avalon-chat-message ${message.playerId === playerId ? 'mine' : ''}`}
               key={message.id}
@@ -159,13 +178,12 @@ export default function Discussion({
           submit();
         }}
       >
-        <label className="sr-only" htmlFor="avalon-chat-input">
-          공개 채팅
-        </label>
+        {!compactView && <label htmlFor="avalon-chat-input">공개 채팅</label>}
         <textarea
           id="avalon-chat-input"
+          aria-label="공개 채팅"
           data-testid="av-chat-input"
-          rows={2}
+          rows={compactView ? 1 : 2}
           value={draft}
           maxLength={600}
           placeholder="방 전체에 보낼 메시지"
@@ -195,7 +213,7 @@ export default function Discussion({
           </button>
         </div>
       </form>
-      <div className="avalon-signals">
+      <div className="avalon-signals" hidden={compactView}>
         <label htmlFor="avalon-signal-target">
           좌석 지목 <small>의견 표현</small>
         </label>

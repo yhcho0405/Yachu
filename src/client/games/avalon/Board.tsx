@@ -83,8 +83,12 @@ export default function AvalonBoard({
           return (
             <button
               key={player.id}
+              data-testid={`av-board-seat-${player.seat}`}
               className={`avalon-board-name ${selected ? 'selected' : ''} ${focusedId === player.id ? 'focused' : ''}`}
-              style={{ left: `${position.x * 100}%`, top: `${position.y * 100}%` }}
+              style={{
+                left: `${position.x * 100}%`,
+                top: `clamp(26px, ${position.y * 100}%, calc(100% - 26px))`,
+              }}
               onClick={() => onSeatClick(player.id)}
               aria-label={`${player.seat + 1}번 ${player.nickname}${player.id === viewerId ? ' · 나' : ''}${room.leaderId === player.id ? ' · 대장' : ''}${team ? ' · 원정대원' : ''}${submitted ? ' · 제출 완료' : ''}`}
               aria-pressed={selected}

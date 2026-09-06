@@ -6,7 +6,7 @@ import {
   type AvalonStage,
 } from '../../src/shared/avalon';
 import { audioResources, expectOnlySharedMusic, observeAudio } from './audio-probe';
-import { getCode } from './helpers';
+import { getCode, expectInViewport } from './helpers';
 
 async function state(page: Page): Promise<AvalonRoomState> {
   await expect(page.getByTestId('game-state')).toHaveAttribute('data-state', /"gameType":"avalon"/);
@@ -47,9 +47,14 @@ async function inputReady(page: Page) {
 }
 async function selectSeats(page: Page, room: AvalonRoomState, ids: string[]) {
   await inputReady(page);
+  const firstSeat = room.players.find((player) => player.id === ids[0])!.seat;
+  const boardName = page.getByTestId(`av-board-seat-${firstSeat}`);
+  await boardName.click();
+  await expect(boardName).toHaveAttribute('aria-pressed', 'true');
+  if (ids.length === 1) return;
   const details = page.getByTestId('av-seat-details');
   if ((await details.getAttribute('open')) === null) await details.locator('summary').click();
-  for (const id of ids) {
+  for (const id of ids.slice(1)) {
     const seat = room.players.find((player) => player.id === id)!.seat;
     const button = page.getByTestId(`av-seat-${seat}`);
     await button.click();
@@ -78,6 +83,29 @@ async function musicPlaying(page: Page, prefix: 'lobby' | 'aval') {
       );
     })
     .toBe(true);
+}
+async function captureReadiness(page: Page) {
+  return page.evaluate(async () => {
+    const element = document.querySelector('[data-testid="av-results"]');
+    const bounds = element?.getBoundingClientRect();
+    let frames = 0;
+    let pending: number;
+    const sample = () => {
+      frames++;
+      pending = requestAnimationFrame(sample);
+    };
+    pending = requestAnimationFrame(sample);
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    cancelAnimationFrame(pending);
+    return {
+      visibility: document.visibilityState,
+      focused: document.hasFocus(),
+      frames,
+      bounds: bounds
+        ? { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height }
+        : null,
+    };
+  });
 }
 async function crossfadeToLobby(page: Page) {
   let before: number[] = [];
@@ -227,6 +255,16 @@ for (const count of [5, 10]) {
             ].map((selector) => document.querySelector(selector)!.getBoundingClientRect().top),
           );
           expect(order.every((value, index) => index === 0 || value > order[index - 1])).toBe(true);
+        } else {
+          await host.evaluate(() => scrollTo(0, 0));
+          await expectInViewport(host, [
+            '.avalon-status',
+            '.avalon-tracks',
+            '.avalon-board',
+            '#avalon-action',
+            '.avalon-private-area',
+            '#avalon-discussion',
+          ]);
         }
         checkpoint = `초기 화면 캡처 · 폭 ${width}`;
         await host.screenshot({
@@ -354,6 +392,7 @@ for (const count of [5, 10]) {
       );
       await expect(host.getByTestId('av-chat-message').last().locator('b')).toHaveCount(0);
       await expect(pages[1].getByTestId('av-vote-approve')).toHaveAttribute('aria-pressed', 'true');
+      await pages[2].getByTestId('av-discussion-expand').click();
       await pages[2].getByTestId('av-signal-target').selectOption(ids[0]);
       await pages[2].getByTestId('av-signal-trust').click();
       await expect.poll(async () => (await state(host)).signals.length).toBe(1);
@@ -376,7 +415,10 @@ for (const count of [5, 10]) {
       room = await agree(pages);
       expect(room.rejections).toBe(1);
       expect(room.history.proposals[0].votes.filter((value) => value.approve)).toHaveLength(1);
+      await host.locator('#avalon-history > summary').click();
+      await expect(host.getByTestId('av-vote-table')).toBeVisible();
       await expect(host.getByTestId('av-vote-table')).toContainText('반대');
+      await host.locator('#avalon-history > summary').click();
 
       for (let quest = 1; quest <= 4; quest++) {
         checkpoint = `원정 ${quest} · 구성`;
@@ -464,6 +506,14 @@ for (const count of [5, 10]) {
       );
       checkpoint = '결과 캡처';
       await expect(host.getByTestId('av-role-reveal').locator(':scope > div')).toHaveCount(count);
+      const beforeActivation = await captureReadiness(host);
+      // The final action can belong to another browser page. Activate the observed
+      // results page so its animation frames and compositor are available for capture.
+      await host.bringToFront();
+      await info.attach('avalon-capture-readiness', {
+        contentType: 'application/json',
+        body: JSON.stringify({ beforeActivation, afterActivation: await captureReadiness(host) }),
+      });
       await host.getByTestId('av-results').screenshot({
         path: info.outputPath(`avalon-${count}-result.png`),
       });

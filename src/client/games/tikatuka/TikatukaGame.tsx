@@ -239,8 +239,10 @@ export default function TikatukaGame({
       <div className="tika-layout">
         <section className="tika-table">
           <div className="tika-table-heading">
-            <span>티카투카</span>
             <span>{room.phase === 'finished' ? '최종 보드' : `${room.turnNumber}번째 차례`}</span>
+            <p className="tika-status" role="status">
+              {status}
+            </p>
           </div>
           <TikatukaBoard
             room={room}
@@ -254,9 +256,6 @@ export default function TikatukaGame({
             onTargetClick={choose}
             onAnimationChange={setAnimating}
           />
-          <p className="tika-status" role="status">
-            {status}
-          </p>
           <div className="tika-board-legend">
             <span className="tika-layout-note">내 보드 아래 · 상대 보드 위 · 1번 줄은 왼쪽</span>
             <span>
@@ -431,7 +430,7 @@ export default function TikatukaGame({
                 ) : (
                   <p>
                     {room.stage === 'placing' && myTurn
-                      ? '보드 또는 아래 줄 선택 버튼을 누르세요.'
+                      ? '보드 또는 줄 선택 버튼을 누르세요.'
                       : '내 차례에 줄을 선택할 수 있습니다.'}
                   </p>
                 )}
@@ -448,77 +447,77 @@ export default function TikatukaGame({
             </>
           )}
         </section>
+        <section className="tika-scoreboard" aria-label="줄 점수와 선택">
+          <div className="tika-scoreboard-heading">
+            <h2>줄 점수</h2>
+            <p>더 많은 줄에서 이기면 승리 · 줄 수가 같으면 총점 비교</p>
+          </div>
+          <div className="tika-lane-grid">
+            {TIKATUKA_LANES.map((lane) => (
+              <div className="tika-lane-pair" key={lane}>
+                <span className="tika-lane-number">
+                  {lane + 1}번 줄{' '}
+                  <strong>
+                    {own.laneScores[lane] === other.laneScores[lane]
+                      ? '동점'
+                      : own.laneScores[lane] > other.laneScores[lane]
+                        ? '나 우세'
+                        : '상대 우세'}
+                  </strong>
+                </span>
+                {[own, other].map((player) => {
+                  const target = targetFor(player.id, lane);
+                  const chosen =
+                    selectedTarget?.ownerId === player.id && selectedTarget.lane === lane;
+                  const projected = preview?.players.find((value) => value.playerId === player.id)
+                    ?.laneScores[lane];
+                  return (
+                    <button
+                      key={player.id}
+                      className={`tika-lane ${player.id === own.id ? 'mine' : 'opponent'} ${target ? 'legal' : ''} ${chosen ? 'selected' : ''}`}
+                      data-testid={`tika-target-${player.seat}-${lane}`}
+                      disabled={!canPlace || !target}
+                      aria-pressed={chosen}
+                      aria-describedby={`tika-reason-${player.seat}-${lane}`}
+                      aria-label={`${player.id === own.id ? '내' : '상대'} ${lane + 1}번 줄 ${player.laneScores[lane]}점${target ? (target.action === 'attack' ? ' 공격 가능' : ' 배치 가능') : ''}`}
+                      onClick={() => choose({ ownerId: player.id, lane })}
+                    >
+                      <span className="tika-lane-owner">
+                        <span>{player.id === own.id ? '나' : player.nickname}</span>
+                        <small>빈칸 {3 - player.lanes[lane].length}</small>
+                      </span>
+                      <span className="tika-lane-dice">
+                        {[0, 1, 2].map((index) =>
+                          player.lanes[lane][index] ? (
+                            <Die key={index} die={player.lanes[lane][index]!} />
+                          ) : (
+                            <i key={index} />
+                          ),
+                        )}
+                      </span>
+                      <strong>
+                        {player.laneScores[lane]}
+                        {projected !== undefined && projected !== player.laneScores[lane] && (
+                          <em> → {projected}</em>
+                        )}
+                        <small>점</small>
+                      </strong>
+                      <span className="tika-lane-action" id={`tika-reason-${player.seat}-${lane}`}>
+                        {target
+                          ? target.action === 'attack'
+                            ? '공격 선택'
+                            : '배치 선택'
+                          : unavailableReason(player, lane)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+          <p className="tika-shortcuts">키보드: 1–3 내 줄 · 4–6 상대 줄</p>
+        </section>
       </div>
-      <section className="tika-scoreboard" aria-label="줄 점수와 선택">
-        <div className="tika-scoreboard-heading">
-          <h2>줄 점수</h2>
-          <p>더 많은 줄에서 이기면 승리 · 줄 수가 같으면 총점 비교</p>
-        </div>
-        <div className="tika-lane-grid">
-          {TIKATUKA_LANES.map((lane) => (
-            <div className="tika-lane-pair" key={lane}>
-              <span className="tika-lane-number">
-                {lane + 1}번 줄{' '}
-                <strong>
-                  {own.laneScores[lane] === other.laneScores[lane]
-                    ? '동점'
-                    : own.laneScores[lane] > other.laneScores[lane]
-                      ? '나 우세'
-                      : '상대 우세'}
-                </strong>
-              </span>
-              {[own, other].map((player) => {
-                const target = targetFor(player.id, lane);
-                const chosen =
-                  selectedTarget?.ownerId === player.id && selectedTarget.lane === lane;
-                const projected = preview?.players.find((value) => value.playerId === player.id)
-                  ?.laneScores[lane];
-                return (
-                  <button
-                    key={player.id}
-                    className={`tika-lane ${player.id === own.id ? 'mine' : 'opponent'} ${target ? 'legal' : ''} ${chosen ? 'selected' : ''}`}
-                    data-testid={`tika-target-${player.seat}-${lane}`}
-                    disabled={!canPlace || !target}
-                    aria-pressed={chosen}
-                    aria-describedby={`tika-reason-${player.seat}-${lane}`}
-                    aria-label={`${player.id === own.id ? '내' : '상대'} ${lane + 1}번 줄 ${player.laneScores[lane]}점${target ? (target.action === 'attack' ? ' 공격 가능' : ' 배치 가능') : ''}`}
-                    onClick={() => choose({ ownerId: player.id, lane })}
-                  >
-                    <span className="tika-lane-owner">
-                      <span>{player.id === own.id ? '나' : player.nickname}</span>
-                      <small>빈칸 {3 - player.lanes[lane].length}</small>
-                    </span>
-                    <span className="tika-lane-dice">
-                      {[0, 1, 2].map((index) =>
-                        player.lanes[lane][index] ? (
-                          <Die key={index} die={player.lanes[lane][index]!} />
-                        ) : (
-                          <i key={index} />
-                        ),
-                      )}
-                    </span>
-                    <strong>
-                      {player.laneScores[lane]}
-                      {projected !== undefined && projected !== player.laneScores[lane] && (
-                        <em> → {projected}</em>
-                      )}
-                      <small>점</small>
-                    </strong>
-                    <span className="tika-lane-action" id={`tika-reason-${player.seat}-${lane}`}>
-                      {target
-                        ? target.action === 'attack'
-                          ? '공격 선택'
-                          : '배치 선택'
-                        : unavailableReason(player, lane)}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-        <p className="tika-shortcuts">키보드: 1–3 내 줄 · 4–6 상대 줄</p>
-      </section>
       {confirmHold && (
         <Modal title="홀드할까요?" onClose={() => setConfirmHold(false)}>
           <p className="help-text">

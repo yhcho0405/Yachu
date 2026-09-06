@@ -126,6 +126,7 @@ export default function App() {
   const showCatalog = !room || browsing;
   const visibleGame = showCatalog ? selectedGame : room.gameType;
   const game = gameMetadata(visibleGame);
+  const activeGame = !showCatalog && room.phase !== 'lobby';
   const validNickname = !!session || nickname.trim().length > 0;
   const own = room?.players.find((player) => player.id === session?.playerId);
   const actingId =
@@ -152,7 +153,7 @@ export default function App() {
   };
   return (
     <div
-      className={`app-shell ${showCatalog ? 'catalog-shell' : ''}`}
+      className={`app-shell ${showCatalog ? 'catalog-shell' : ''} ${activeGame ? 'game-active' : ''}`}
       data-testid="game-state"
       data-game-type={room?.gameType ?? selectedGame}
       data-phase={room?.phase ?? 'home'}
@@ -164,6 +165,7 @@ export default function App() {
       <header className="topbar">
         <a
           className="brand"
+          aria-label="아틀리에 · 게임 목록"
           href="/"
           onClick={(event) => {
             event.preventDefault();
@@ -178,21 +180,35 @@ export default function App() {
             <small>온라인 보드게임</small>
           </span>
         </a>
+        {activeGame && <strong className="active-game-name">{game.name}</strong>}
         <div className="topbar-actions">
           {room && (
             <>
               <button className="catalog-nav" onClick={() => setBrowsing((value) => !value)}>
                 {showCatalog ? '경기로 돌아가기' : '게임 목록'}
               </button>
-              <span className="room-pill">
-                <span className={`connection-dot ${connected ? 'connected' : ''}`} />
-                <span>방</span>
-                <strong data-testid="room-code">{room.code}</strong>
-              </span>
+              {activeGame ? (
+                <button
+                  className={`room-pill room-invite ${copied ? 'copied' : ''}`}
+                  onClick={() => void copyInvite()}
+                  aria-label={copied ? '초대 링크 복사 완료' : '초대 링크 복사'}
+                  title={`방 ${room.code} · ${copied ? '복사 완료' : '초대 링크 복사'}`}
+                >
+                  <span className={`connection-dot ${connected ? 'connected' : ''}`} />
+                  <strong data-testid="room-code">{room.code}</strong>
+                  <Icon name="copy" />
+                </button>
+              ) : (
+                <span className="room-pill">
+                  <span className={`connection-dot ${connected ? 'connected' : ''}`} />
+                  <span>방</span>
+                  <strong data-testid="room-code">{room.code}</strong>
+                </span>
+              )}
             </>
           )}
           <button
-            className="icon-button"
+            className="icon-button quick-mute"
             onClick={() => setSettings((value) => ({ ...value, muted: !value.muted }))}
             aria-label={settings.muted ? '음소거 해제' : '음소거'}
             aria-pressed={settings.muted}
@@ -362,7 +378,7 @@ export default function App() {
         </main>
       ) : (
         <main className={`room-layout room-${room.gameType}`}>
-          <div className="room-title">
+          <div className={activeGame ? 'room-title sr-only' : 'room-title'}>
             <div>
               <span className="eyebrow">{game.name}</span>
               <h1 data-testid="phase">
@@ -379,10 +395,12 @@ export default function App() {
                         : `${current?.nickname ?? '상대'} 차례`}
               </h1>
             </div>
-            <button className="invite-button" onClick={() => void copyInvite()}>
-              <Icon name="copy" />
-              {copied ? '복사 완료' : '초대 링크 복사'}
-            </button>
+            {!activeGame && (
+              <button className="invite-button" onClick={() => void copyInvite()}>
+                <Icon name="copy" />
+                {copied ? '복사 완료' : '초대 링크 복사'}
+              </button>
+            )}
           </div>
           {session && room.phase === 'lobby' ? (
             <Lobby

@@ -27,7 +27,6 @@ function Scorecard({
     <section className="scorecard" aria-label="점수판">
       <header className="scorecard-heading">
         <div>
-          <span className="eyebrow">점수판</span>
           <h2>점수판</h2>
         </div>
         <span className="round-chip">

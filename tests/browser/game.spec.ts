@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { CATEGORIES } from '../../src/shared/protocol';
-import { createPlayers, agree, roomState } from './helpers';
+import { createPlayers, agree, roomState, expectInViewport } from './helpers';
 
 for (const count of [1, 2, 3, 4])
   test(`${count} independent guests: complete twelve rounds, synchronized state and rematch`, async ({
@@ -52,6 +52,14 @@ for (const count of [1, 2, 3, 4])
           if (await zero.isVisible()) {
             if ((await zero.getAttribute('type')) === 'checkbox') await zero.check();
             else await zero.click();
+          }
+          if (round === 0 && seat === 0) {
+            await expectInViewport(page, [
+              '.play-table .board-viewport',
+              '[data-testid="roll-button"]',
+              '[data-testid="confirm-score"]',
+              '.scorecard',
+            ]);
           }
           await page.getByTestId('confirm-score').click();
           await expect

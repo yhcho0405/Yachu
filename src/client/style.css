@@ -4105,3 +4105,415 @@ kbd {
     max-width: 170px;
   }
 }
+
+/* Active games keep navigation compact and place decisions next to the board. */
+.game-active {
+  padding: 0 clamp(16px, 2vw, 28px);
+}
+.game-active .topbar {
+  height: 52px;
+  min-height: 52px;
+  gap: 12px;
+}
+.game-active .brand {
+  gap: 0;
+  flex-shrink: 0;
+}
+.game-active .brand > span:last-child {
+  display: none;
+}
+.game-active .brand-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+}
+.game-active .brand-mark .die-icon {
+  width: 22px;
+  height: 22px;
+}
+.active-game-name {
+  font-size: 16px;
+  color: #315348;
+  white-space: nowrap;
+}
+.game-active .topbar-actions {
+  flex: 1;
+  justify-content: flex-end;
+  gap: 5px;
+}
+.game-active .icon-button {
+  width: 36px;
+  height: 36px;
+}
+.game-active .catalog-nav {
+  min-height: 36px;
+  font-size: 11px;
+  padding: 7px 10px;
+}
+.game-active .room-pill {
+  position: static;
+  margin: 0 4px 0 0;
+  padding: 7px 10px;
+  min-height: 36px;
+  border: 1px solid #dce2d6;
+  border-radius: 8px;
+  gap: 7px;
+}
+.game-active .room-pill strong {
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+.game-active .room-invite svg {
+  width: 13px;
+  height: 13px;
+}
+.game-active .room-invite.copied {
+  background: #dcebd5;
+  border-color: #81a879;
+}
+.game-active .room-layout {
+  padding-top: 12px;
+}
+.game-active .room-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.game-active > .site-footer {
+  display: none;
+}
+.game-active .players-strip,
+.game-active .tika-players {
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.game-active .player-card,
+.game-active .tika-player {
+  padding: 8px 12px;
+  gap: 9px;
+  border-radius: 9px;
+}
+.game-active .player-avatar {
+  width: 30px;
+  height: 30px;
+}
+.game-active .player-info > span,
+.game-active .tika-player-name > span {
+  margin-top: 3px;
+}
+.game-active .tika-table-heading {
+  padding: 10px 14px;
+  align-items: center;
+  gap: 14px;
+  min-height: 42px;
+}
+.game-active .tika-table-heading > span {
+  flex-shrink: 0;
+}
+.game-active .tika-table-heading .tika-status {
+  flex: 1;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-height: 0;
+  background: none;
+  font-size: 12px;
+  line-height: 1.5;
+  letter-spacing: 0;
+}
+@media (min-width: 901px) {
+  .game-active .play-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(350px, 400px);
+    gap: 18px;
+    padding-bottom: 14px;
+  }
+  .game-active .play-table {
+    padding: 12px 14px;
+    border-radius: 12px;
+  }
+  .game-active .play-table-top {
+    font-size: 11px;
+    letter-spacing: 0;
+    min-height: 20px;
+  }
+  .game-active .play-table .board-viewport {
+    height: clamp(205px, calc(100svh - 520px), 430px);
+  }
+  .game-active .dice-controls {
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .game-active .die-control {
+    min-width: 58px;
+    min-height: 53px;
+    padding: 5px 10px;
+  }
+  .game-active .die-control .die-icon {
+    width: 25px;
+    height: 25px;
+  }
+  .game-active .dice-instruction {
+    font-size: 11px;
+    margin-bottom: 8px;
+  }
+  .game-active .roll-button {
+    min-height: 44px;
+    padding: 9px 16px;
+  }
+  .game-active .table-footnote {
+    margin-top: 7px;
+    font-size: 9px;
+  }
+  .game-active .score-selection {
+    margin-top: 10px;
+    padding: 10px 2px 0;
+    min-height: 44px;
+    gap: 12px;
+  }
+  .game-active .score-selection h3 {
+    margin: 3px 0;
+    font-size: 16px;
+  }
+  .game-active .score-selection h3 strong {
+    font-size: 23px;
+  }
+  .game-active .score-selection .button {
+    min-height: 44px;
+    padding: 9px 14px;
+  }
+  .game-active .score-selection p {
+    line-height: 1.5;
+  }
+  .game-active .scorecard-heading {
+    padding: 11px 14px;
+    min-height: 46px;
+  }
+  .game-active .scorecard-heading h2 {
+    margin: 0;
+    font-size: 17px;
+  }
+  .game-active .scorecard thead th {
+    height: 32px;
+  }
+  .game-active .scorecard th,
+  .game-active .scorecard td {
+    height: 30px;
+  }
+  .game-active .scorecard .score-value {
+    height: 29px;
+    font-size: 14px;
+  }
+  .game-active .scorecard th:first-child {
+    padding-left: 14px;
+  }
+  .game-active .scorecard tfoot th,
+  .game-active .scorecard tfoot td {
+    height: 27px;
+  }
+  .game-active .scorecard tfoot .total-row > * {
+    height: 36px;
+  }
+  .game-active .bonus-progress {
+    padding: 8px 14px 3px;
+  }
+  .game-active .progress-track {
+    margin-top: 6px;
+  }
+  .game-active .score-hint {
+    padding: 6px 12px 9px;
+    margin: 0;
+    font-size: 10px;
+  }
+  .game-active .results {
+    padding-top: 12px;
+  }
+  .game-active .results h2 {
+    margin: 8px 0 12px;
+  }
+  .game-active .rank-list {
+    margin: 12px 0;
+  }
+  .game-active .rank-list > div {
+    padding: 9px 12px;
+  }
+  .game-active .tikatuka-game {
+    margin-bottom: 14px;
+  }
+  .game-active .tika-player-name strong {
+    font-size: 13px;
+  }
+  .game-active .tika-player-score > strong {
+    font-size: 21px;
+  }
+  .game-active .tika-layout {
+    grid-template-columns: minmax(0, 1fr) 305px;
+    grid-template-areas: 'table panel' 'scores panel';
+    gap: 12px 16px;
+  }
+  .game-active .tika-table {
+    grid-area: table;
+  }
+  .game-active .tikatuka-board-viewport {
+    height: clamp(210px, calc(100svh - 530px), 430px);
+  }
+  .game-active .tika-board-legend {
+    padding: 6px 10px;
+    gap: 6px 12px;
+  }
+  .game-active .tika-panel {
+    grid-area: panel;
+    padding: 16px;
+  }
+  .game-active .tika-pending {
+    min-height: 56px;
+    margin-bottom: 10px;
+  }
+  .game-active .tika-panel h2 {
+    font-size: 19px;
+    margin-top: 4px;
+  }
+  .game-active .tika-tools {
+    margin-bottom: 12px;
+  }
+  .game-active .tika-selection {
+    padding-top: 12px;
+  }
+  .game-active .tika-selection h3 {
+    margin-top: 6px;
+  }
+  .game-active .tika-selection p {
+    min-height: 0;
+    margin: 6px 0 10px;
+    line-height: 1.6;
+  }
+  .game-active .tika-selection .button {
+    margin-top: 12px;
+  }
+  .game-active .tika-preview-scores > div {
+    padding: 8px;
+  }
+  .game-active .tika-preview-scores strong {
+    font-size: 18px;
+    margin-top: 4px;
+  }
+  .game-active .tika-scoreboard {
+    grid-area: scores;
+    margin: 0;
+  }
+  .game-active .tika-scoreboard-heading {
+    padding: 9px 12px;
+    gap: 12px;
+  }
+  .game-active .tika-scoreboard-heading h2 {
+    font-size: 14px;
+  }
+  .game-active .tika-lane-grid {
+    gap: 10px;
+    padding: 9px 12px;
+  }
+  .game-active .tika-lane-pair {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 6px;
+    align-content: start;
+  }
+  .game-active .tika-lane-number {
+    grid-column: 1 / -1;
+    margin: 0;
+  }
+  .game-active .tika-lane {
+    padding: 8px;
+    gap: 5px;
+    margin: 0;
+  }
+  .game-active .tika-lane-dice {
+    gap: 3px;
+  }
+  .game-active .tika-lane .tika-die .die-icon {
+    width: 22px;
+    height: 22px;
+    padding: 3px;
+  }
+  .game-active .tika-lane-dice > i {
+    width: 23px;
+    height: 23px;
+  }
+  .game-active .tika-lane > strong {
+    font-size: 16px;
+  }
+  .game-active .tika-lane-action {
+    font-size: 10px;
+    line-height: 1.4;
+  }
+  .game-active .tika-shortcuts {
+    margin: 0;
+    padding: 0 12px 8px;
+  }
+}
+@media (max-width: 680px) {
+  .game-active {
+    padding: 0 12px;
+  }
+  .game-active .topbar {
+    gap: 4px;
+  }
+  .game-active .brand,
+  .game-active .quick-mute {
+    display: none;
+  }
+  .game-active .active-game-name {
+    font-size: 13px;
+  }
+  .game-active .topbar-actions {
+    gap: 1px;
+  }
+  .game-active .topbar-actions .icon-button {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+  }
+  .game-active .catalog-nav {
+    min-height: 44px;
+    padding: 6px 5px;
+    font-size: 10px;
+  }
+  .game-active .room-pill {
+    padding: 6px;
+    min-height: 44px;
+    gap: 4px;
+    margin: 0;
+  }
+  .game-active .room-pill strong {
+    font-size: 9px;
+    letter-spacing: 0.7px;
+  }
+  .game-active .room-invite svg {
+    width: 11px;
+    height: 11px;
+  }
+  .game-active .room-layout {
+    padding-top: 10px;
+  }
+  .game-active .tika-table-heading {
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    padding: 10px 12px;
+  }
+  .game-active .tika-table-heading .tika-status {
+    flex-basis: 180px;
+    font-size: 11px;
+  }
+}
+@media (min-width: 901px) and (max-width: 1200px) {
+  .game-active .tika-lane-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .game-active .tika-lane-number {
+    grid-column: auto;
+  }
+}

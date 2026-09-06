@@ -1266,3 +1266,427 @@
 .avalon-action .avalon-confirm-row p {
   flex: auto;
 }
+
+/* Keep the table, current decision, and recent discussion together during play. */
+.avalon-board-name:active:not(:disabled) {
+  transform: translate(-50%, -50%);
+}
+.avalon-layout {
+  grid-template-areas: 'board side' 'discussion side';
+  gap: 12px 16px;
+}
+.avalon-side {
+  grid-area: side;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.avalon-side .avalon-action,
+.avalon-side .avalon-private-area {
+  grid-area: auto;
+}
+.avalon-board-area {
+  gap: 6px;
+}
+.avalon-status {
+  grid-template-columns: minmax(220px, 1fr) minmax(130px, 0.65fr) minmax(250px, 1.3fr);
+  padding: 10px 16px;
+  gap: 18px;
+  min-height: 66px;
+  border-radius: 12px;
+}
+.avalon-phase-heading {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.avalon-phase-heading .avalon-kicker {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+.avalon-status h2 {
+  font-size: 22px;
+}
+.avalon-status-owner,
+.avalon-status-task {
+  padding-left: 18px;
+}
+.avalon-status-owner > span,
+.avalon-status-task > span {
+  margin-bottom: 3px;
+  font-size: 12px;
+}
+.avalon-status-task p {
+  font-size: 13px;
+  line-height: 1.45;
+}
+.avalon-latest-summary {
+  color: #71552c;
+  font-weight: 650;
+}
+.avalon-tracks {
+  margin: 8px 0 12px;
+  gap: 10px;
+}
+.avalon-quest-track li {
+  padding: 7px 8px;
+  gap: 2px;
+  border-radius: 9px;
+}
+.avalon-quest-track small {
+  font-size: 11px;
+}
+.avalon-rejections {
+  gap: 5px;
+  padding: 8px 12px;
+}
+.avalon-rejections small {
+  font-size: 11px;
+}
+.avalon-history-details {
+  margin-top: 14px;
+  border-top: 1px solid #d8dbd1;
+  padding-top: 6px;
+}
+.avalon-history-details > summary,
+.avalon-seat-details > summary,
+.avalon-awaiting > summary {
+  cursor: pointer;
+  min-height: 32px;
+  align-content: center;
+  font-size: 13px;
+  font-weight: 650;
+}
+.avalon-history-details > summary {
+  min-height: 44px;
+}
+.avalon-seat-details {
+  padding: 3px 12px;
+}
+.avalon-seat-details[open] {
+  padding-bottom: 12px;
+}
+.avalon-side .avalon-jump-links {
+  margin: 0;
+  gap: 8px;
+}
+.avalon-jump-links a {
+  min-height: 44px;
+  padding: 9px 12px;
+  align-content: center;
+  border: 1px solid #d9dbd1;
+  border-radius: 8px;
+  font-size: 13px;
+  text-decoration: none;
+}
+.avalon-discussion-expand {
+  min-height: 44px;
+  border: 1px solid #d6dacd;
+  background: #f5f6ee;
+  color: #486451;
+  border-radius: 7px;
+  padding: 6px 10px;
+  font-size: 12px !important;
+}
+.avalon-discussion.is-compact {
+  padding: 8px 12px;
+}
+.avalon-discussion.is-compact .avalon-panel-heading {
+  margin: 0 0 4px;
+  min-height: 32px;
+}
+.avalon-discussion.is-compact .avalon-kicker {
+  display: none;
+}
+.avalon-discussion.is-compact h2 {
+  font-size: 15px;
+}
+.avalon-discussion.is-compact .avalon-chat-log {
+  max-height: 52px;
+  min-height: 22px;
+  font-size: 13px;
+}
+.avalon-discussion.is-compact .avalon-chat-empty {
+  margin: 0;
+  padding: 1px 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.avalon-discussion.is-compact .avalon-chat-message {
+  padding: 3px 0;
+}
+.avalon-discussion.is-compact .avalon-chat-message header,
+.avalon-discussion.is-compact .avalon-chat-message p {
+  display: inline;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.avalon-discussion.is-compact .avalon-chat-message p {
+  margin-left: 8px;
+}
+.avalon-discussion.is-compact .avalon-chat-message time {
+  display: none;
+}
+.avalon-discussion.is-compact .avalon-chat-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  margin-top: 6px;
+}
+.avalon-discussion.is-compact .avalon-chat-form textarea {
+  min-height: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 10px;
+  font-size: 13px;
+}
+.avalon-discussion.is-compact .avalon-chat-form > div {
+  margin: 0;
+  gap: 6px;
+}
+.avalon-discussion.is-compact .avalon-chat-form > div > span {
+  display: none;
+}
+.avalon-discussion.is-compact .avalon-chat-form > div > span.avalon-invalid {
+  display: block;
+  font-size: 12px;
+}
+.avalon-discussion.is-compact .avalon-chat-form .button {
+  min-height: 44px;
+  min-width: 64px;
+  font-size: 13px;
+}
+@media (min-width: 901px) {
+  .avalon-board-name {
+    width: 84px;
+    min-height: 44px;
+    font-size: 12px !important;
+  }
+  .avalon-board-name small {
+    font-size: 10px;
+  }
+  .avalon-board-direction {
+    font-size: 11px;
+  }
+  .avalon-board {
+    height: clamp(430px, calc(100dvh - 450px), 500px);
+  }
+  .avalon-action {
+    padding: 14px;
+  }
+  .avalon-action .avalon-panel-heading {
+    margin-bottom: 8px;
+  }
+  .avalon-action .avalon-panel-heading h2 {
+    font-size: 16px;
+  }
+  .avalon-action-instruction {
+    font-size: 13px;
+    line-height: 1.5;
+    margin-bottom: 10px;
+  }
+  .avalon-confirmed-team {
+    gap: 5px 9px;
+    padding: 8px;
+    margin-bottom: 10px;
+    font-size: 13px;
+  }
+  .avalon-confirmed-team > span {
+    width: auto;
+    margin: 0;
+    font-size: 12px;
+  }
+  .avalon-choice-pair {
+    gap: 8px;
+  }
+  .avalon-choice-pair > button {
+    min-height: 72px;
+    gap: 5px;
+    padding: 10px;
+  }
+  .avalon-choice-pair b {
+    font-size: 22px;
+  }
+  .avalon-choice-pair strong {
+    font-size: 16px;
+  }
+  .avalon-action .avalon-confirm-row {
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .avalon-confirm-row p {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .avalon-action .button {
+    min-height: 44px;
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+  .avalon-team-selection,
+  .avalon-target-selection {
+    padding: 10px;
+    min-height: 44px;
+  }
+  .avalon-team-selection > div {
+    gap: 6px;
+    margin-top: 6px;
+  }
+  .avalon-team-selection button {
+    min-height: 36px;
+    padding: 6px 8px;
+  }
+  .avalon-rule-note {
+    margin: 8px 0;
+    padding: 6px 9px;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .avalon-action .avalon-subtle {
+    margin: 6px 0;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .avalon-submitted {
+    padding: 12px;
+  }
+  .avalon-submitted p {
+    margin: 6px 0;
+  }
+  .avalon-awaiting {
+    margin-top: 8px;
+    padding-top: 4px;
+  }
+  .avalon-private {
+    padding: 10px 12px;
+  }
+  .avalon-private .avalon-panel-heading {
+    margin: 0;
+  }
+  .avalon-private .avalon-panel-heading h2 {
+    font-size: 16px;
+  }
+  .avalon-private .avalon-kicker,
+  .avalon-private:has([aria-expanded='false']) > .avalon-subtle {
+    display: none;
+  }
+  .avalon-private .button {
+    min-height: 44px;
+    font-size: 13px;
+  }
+  .avalon-results h3 {
+    font-size: 25px;
+    margin: 10px 0 6px;
+  }
+  .avalon-results > p {
+    margin: 7px 0;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .avalon-result-counts {
+    margin: 10px 0;
+    gap: 20px;
+  }
+  .avalon-result-counts b {
+    font-size: 20px;
+  }
+  .avalon-role-reveal {
+    grid-template-columns: 1fr;
+    gap: 4px;
+    margin: 10px 0;
+  }
+  .avalon-role-reveal > div {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+  .avalon-role-reveal span {
+    overflow: visible;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+@media (max-width: 900px) {
+  .avalon-layout {
+    grid-template-columns: 1fr;
+    grid-template-areas: 'board' 'side' 'discussion';
+  }
+  .avalon-status {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .avalon-status-task {
+    grid-column: 1 / -1;
+    border-left: 0;
+    border-top: 1px solid #dedbcf;
+    padding: 9px 0 0;
+  }
+  .avalon-side .avalon-jump-links {
+    display: none;
+  }
+  .avalon-phase-heading {
+    display: block;
+  }
+  .avalon-phase-heading .avalon-kicker {
+    margin-bottom: 4px;
+  }
+}
+@media (max-width: 600px) {
+  .avalon-status {
+    padding: 12px;
+    gap: 10px;
+  }
+  .avalon-status h2 {
+    font-size: 20px;
+  }
+  .avalon-status-task > span {
+    display: none;
+  }
+  .avalon-tracks {
+    margin: 10px 0;
+  }
+  .avalon-quest-track li {
+    padding: 8px 2px;
+  }
+  .avalon-quest-track small {
+    white-space: normal;
+    font-size: 10px;
+    line-height: 1.4;
+    letter-spacing: 0;
+  }
+  .avalon-quest-track span {
+    font-size: 11px;
+  }
+  .avalon-seat-details > summary,
+  .avalon-awaiting > summary {
+    min-height: 44px;
+  }
+  .avalon-discussion.is-compact .avalon-chat-log {
+    max-height: 110px;
+  }
+}
+
+@media (min-width: 901px) and (max-height: 780px) {
+  .avalon-status {
+    min-height: 56px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+  .avalon-tracks {
+    margin-top: 6px;
+    margin-bottom: 8px;
+  }
+  .avalon-quest-track li {
+    padding-top: 5px;
+    padding-bottom: 5px;
+    gap: 1px;
+  }
+  .avalon-board {
+    height: clamp(320px, calc(100dvh - 400px), 360px);
+  }
+  .avalon-side {
+    gap: 8px;
+  }
+}

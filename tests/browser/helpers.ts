@@ -1,5 +1,28 @@
 import { expect, type Page, type Browser, type BrowserContext } from '@playwright/test';
 import type { YachtRoomState as RoomState } from '../../src/shared/protocol';
+export async function expectInViewport(page: Page, selectors: string[]) {
+  const layout = await page.evaluate(
+    (selectors) => ({
+      scrollY,
+      overflow: document.documentElement.scrollWidth > innerWidth + 1,
+      outside: selectors.filter((selector) => {
+        const element = document.querySelector(selector);
+        if (!element) return true;
+        const rect = element.getBoundingClientRect();
+        return (
+          rect.width <= 0 ||
+          rect.height <= 0 ||
+          rect.top < -1 ||
+          rect.left < -1 ||
+          rect.bottom > innerHeight + 1 ||
+          rect.right > innerWidth + 1
+        );
+      }),
+    }),
+    selectors,
+  );
+  expect(layout).toEqual({ scrollY: 0, overflow: false, outside: [] });
+}
 export async function roomState(page: Page, code: string): Promise<RoomState> {
   return page.evaluate(async (code) => {
     const r = await fetch(`/api/rooms/${code}`, {
