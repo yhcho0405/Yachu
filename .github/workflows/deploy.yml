@@ -41,6 +41,8 @@ jobs:
           path: |
             playwright-report/
             test-results/
+            work/local-diagnostics.jsonl
+            work/local-runtime-stack.txt
           retention-days: 7
       - name: Confirm this is still the newest main commit
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
