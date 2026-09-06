@@ -3,6 +3,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -11,7 +12,7 @@ concurrency:
 jobs:
   verify-deploy:
     runs-on: ubuntu-24.04
-    timeout-minutes: 75
+    timeout-minutes: ${{ github.event_name == 'push' && 15 || 75 }}
     env:
       WRANGLER_SEND_METRICS: 'false'
     steps:
@@ -25,16 +26,19 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npx playwright install --with-deps chromium firefox
+        if: github.event_name != 'push'
       - name: Build client and Worker without production credentials
         run: npm run build && npm run build:worker
       - name: Real local Workers and Durable Objects browser verification
         id: local_browser
+        if: github.event_name != 'push'
         run: npm run test:e2e
       - name: Verify durable recovery after a real workerd restart
         id: persistence
+        if: github.event_name != 'push'
         run: npm run test:persistence
       - name: Keep local verification evidence
-        if: always()
+        if: always() && github.event_name != 'push'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: local-browser-results-${{ github.sha }}
@@ -58,18 +62,16 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
         run: node scripts/deploy.mjs
-      - name: Verify live revision and Yacht, Tikatuka and Avalon games
-        id: live_browser
+      - name: Verify live revision and published game assets
+        id: live_smoke
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: npm run test:e2e
+        run: node scripts/verify-live.mjs
       - name: Keep production verification evidence
         if: always() && github.event_name == 'push' && env.PLAYWRIGHT_BASE_URL != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: live-browser-results-${{ github.sha }}
-          path: |
-            playwright-report/
-            test-results/
+          name: live-smoke-results-${{ github.sha }}
+          path: work/live-smoke.json
           retention-days: 7
       - name: Record verification result
         if: always()
@@ -77,6 +79,6 @@ jobs:
           JOB_STATUS: ${{ job.status }}
           LOCAL_BROWSER: ${{ steps.local_browser.outcome }}
           PERSISTENCE: ${{ steps.persistence.outcome }}
-          LIVE_BROWSER: ${{ steps.live_browser.outcome }}
+          LIVE_SMOKE: ${{ steps.live_smoke.outcome }}
         run: |
           node scripts/summary.mjs

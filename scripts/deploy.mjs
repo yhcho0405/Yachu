@@ -41,7 +41,7 @@ try {
   if (process.env.GITHUB_STEP_SUMMARY)
     appendFileSync(
       process.env.GITHUB_STEP_SUMMARY,
-      `\n### 배포\n- 플레이 URL: ${url}\n- 커밋: ${process.env.GITHUB_SHA}\n- 실제 브라우저 검증: 다음 단계 결과를 확인하세요.\n`,
+      `\n### 배포\n- 플레이 URL: ${url}\n- 커밋: ${process.env.GITHUB_SHA}\n- 운영 버전·자산 확인: 다음 단계 결과를 확인하세요.\n`,
     );
 } finally {
   rmSync(temp, { recursive: true, force: true });

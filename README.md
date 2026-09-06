@@ -45,7 +45,7 @@ npm run test:persistence  # 세 게임의 실제 프로세스 중지/재시작
 - `src/shared/protocol.ts`: 공통 메시지와 `gameType`으로 좁혀지는 상태·명령. 야추는 `rules.ts`, 티카투카는 `tikatuka.ts`, 아발론은 `avalon.ts`에 규칙·타입을 분리합니다. 아발론 내부 상태는 네트워크 상태 타입에 포함하지 않습니다.
 - `src/server`: 공통 인증·방·저장·연결을 공유하고 `games/`의 순수 게임 모듈로 상태를 전이합니다. `migration.ts`는 실제 기존 야추 형식만 안전하게 이전합니다.
 - `wrangler.jsonc`: 인프라 설정의 유일한 원본. 기존 Worker `dice-atelier`, `GameRoom`/`SessionRegistry`, 바인딩과 SQLite 초기 마이그레이션을 유지합니다.
-- `.github/workflows/deploy.yml`: PR 검사, main 자동 배포와 배포 후 세 게임의 정상 브라우저 검사.
+- `.github/workflows/deploy.yml`: PR·수동 전체 검증, main의 빠른 자동 배포와 배포 후 공개 버전·자산 확인.
 
 공통 표시명은 아틀리에이며 배포 주소, 기존 세션·설정 키와 Durable Object 네임스페이스는 바꾸지 않습니다. 게임 카드를 둘러보는 동작은 기권이 아니며, 다른 게임을 시작하려면 현재 방에서 명시적으로 나갑니다. 초대 참가 시 게임 종류는 서버의 방 상태가 결정합니다. 추가 게임의 등록 경계와 호환성은 [멀티게임 구조](docs/multigame.md)를 참고하세요.
 
@@ -68,6 +68,8 @@ npm run test:persistence  # 세 게임의 실제 프로세스 중지/재시작
 ## 배포
 
 `main` push가 유일한 운영 배포 경로입니다. 기존 GitHub Actions Secrets `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `SESSION_SECRET`을 배포 단계에만 전달합니다. PR 코드에는 운영 비밀을 제공하지 않습니다.
+
+main에서는 타입·정적·단위 검사와 빌드를 수행한 뒤 배포하고 서버/클라이언트 버전·게임 청크·썸네일·BGM을 빠르게 확인합니다. 전체 경기·재경기·브라우저 캡처·실제 프로세스 재시작은 개발 과정과 PR/수동 실행에서 검수하며, 운영 배포마다 반복하지 않습니다.
 
 Wrangler `--secrets-file`로 코드와 같은 `SESSION_SECRET`을 함께 배포합니다. 임시 파일은0600 권한으로 만들고 즉시 삭제하며 값은 소스·vars·VITE 변수·아티팩트에 넣지 않습니다. Secret이 없거나32바이트 미만이면 서버는503으로 거절합니다. 검사 실패 시 배포하지 않고 배포 후 검사 실패도 Actions 실패로 기록합니다. main 실행은 직렬화하고 배포 직전에 최신 SHA를 확인합니다.
 

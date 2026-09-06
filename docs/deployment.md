@@ -5,14 +5,14 @@
 GitHub Actions의 main push만 사용한다. 등록된 세 Secrets의 값을 로컬에서 조회할 필요가 없다. Actions는 고정 SHA의 공식checkout/setup-node/upload-artifact를 사용하며 contents:read만 요청한다. 운영 배포 실행은 충돌하지 않게 직렬화하고, 배포 직전에main 최신 SHA와 현재SHA를 비교한다. 더 오래된 커밋이면 배포 전에 실패한다.
 
 1. npm ci → 타입/정적/단위 검사.
-2. 같은 `wrangler.jsonc`에서 파생한 실제 workerd 로컬 서버에서 Chromium 야추1~4인, 티카투카2인·컴퓨터, 아발론5·10인 전 경기와 재경기, 게임 전환·격리 및 Firefox UI 검사. 아발론의 이전 프로토콜 거절과 수신자별 비공개 정보 경계도 로컬에서 확인한다.
-3. 실제 workerd 재시작 후 야추 세션/턴/주사위/중복처리, 티카투카 공격 보너스·재굴림 후보·컴퓨터 Alarm, 아발론 역할·부분 투표·부분 원정 카드·익명 집계·개인 영수증 복구 검사.
-4. 빌드한 클라이언트와 Worker에 같은Git SHA를 넣는다. 이 검사된 코드를 wrangler deploy로 올린다.
-5. --secrets-file로 SESSION_SECRET을 같은 업로드의 런타임비밀로 전달한다. 파일을 출력하지 않으며 임시파일은 finally에서 삭제한다.
-6. Wrangler가 출력한 workers.dev URL에서 세 게임의 동일한 정상 사용자 브라우저 검사를 재실행한다. 부정 요청 검사는 운영에서 실행하지 않는다.
-7. Actions요약에 URL/SHA/상태를 기록하고 쿠키 없는 스크린샷과 보고서를7일 보관한다.
+2. 클라이언트와 Worker를 같은 Git SHA로 빌드한다.
+3. 최신 main SHA 확인 후 wrangler deploy로 올린다. --secrets-file로 기존 SESSION_SECRET을 같은 업로드의 런타임 비밀로 전달한다. 임시파일은 출력하지 않고 finally에서 삭제한다.
+4. Wrangler가 출력한 workers.dev URL에서 서버·클라이언트 버전 일치와 HTML 진입점을 확인한다. 빌드된 모든 JS/CSS 청크, 썸네일3개와 BGM7개를 병렬 HEAD 요청으로 검사한다. HTTP 상태와 Content-Type을 함께 확인하여 SPA 대체 응답을 성공으로 오인하지 않는다.
+5. Actions 요약에 URL/SHA/상태를 기록하고 인증 정보 없는 공개 점검 보고서를7일 보관한다.
 
-세 게임의 로컬19개와 운영14개 전 경기 검사를 순차 실행하므로 작업 전체 제한은75분이다. 개별 경기10분·조작15초·재시도0 기준은 유지한다. CI 브라우저 검사에서 첫 실패가 생기면 실행을 종료하고 해당 보고서를 보관한다. 모든 필수 검사가 통과해야 배포한다.
+2026-09-07 사용자의 요청에 따라 개발에서 완료한 전체 경기·영상 캡처·재시작 검사를 매 운영 배포에서 반복하지 않는다. main 배포 작업의 최대 시간은15분이며 브라우저 설치도 생략한다. 빠른 기본 검사와 빌드가 실패하면 배포하지 않고, 배포 후 공개 점검 실패도 Actions 실패로 기록한다.
+
+전체 검증은 개발 명령, PR 및 Actions의 Run workflow 수동 실행에 유지한다. 이 경로는 운영 배포와 Secrets 사용 없이 같은 Wrangler 설정의 실제 workerd에서 Chromium 야추1~4인·티카투카2인/컴퓨터·아발론5/10인 전체 경기와 재경기, 게임 전환·격리, Firefox UI, 아발론 수신자별 정보 경계 및 세 게임의 실제 프로세스 재시작 복구를 검사한다. 전체 작업75분·개별 경기10분·조작15초·재시도0 제한은 이 개발 검증에만 적용한다. main에서 생략된 전체 검사를 통과로 집계하지 않는다.
 
 CLOUDFLARE_API_TOKEN과 계정ID는 Worker 런타임으로 전달하지 않는다. SESSION_SECRET은 배포마다 바꾸지 않는다. 기존 비밀과 Durable Object 바인딩/마이그레이션을 보존한다. 실제값 없는 예시는 루트.env.example에만 둔다.
 
