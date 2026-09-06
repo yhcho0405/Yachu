@@ -507,15 +507,27 @@ for (const count of [5, 10]) {
       checkpoint = '결과 캡처';
       await expect(host.getByTestId('av-role-reveal').locator(':scope > div')).toHaveCount(count);
       const beforeActivation = await captureReadiness(host);
-      // The final action can belong to another browser page. Activate the observed
-      // results page so its animation frames and compositor are available for capture.
       await host.bringToFront();
+      const afterActivation = await captureReadiness(host);
       await info.attach('avalon-capture-readiness', {
         contentType: 'application/json',
-        body: JSON.stringify({ beforeActivation, afterActivation: await captureReadiness(host) }),
+        body: JSON.stringify({ beforeActivation, afterActivation }),
       });
-      await host.getByTestId('av-results').screenshot({
+      expect(afterActivation.bounds).toEqual(beforeActivation.bounds);
+      if (!afterActivation.bounds) throw new Error('Missing result rectangle');
+      const clip = afterActivation.bounds;
+      const viewport = host.viewportSize()!;
+      expect(clip.x).toBeGreaterThanOrEqual(0);
+      expect(clip.y).toBeGreaterThanOrEqual(0);
+      expect(clip.width).toBeGreaterThan(0);
+      expect(clip.height).toBeGreaterThan(0);
+      expect(clip.x + clip.width).toBeLessThanOrEqual(viewport.width);
+      expect(clip.y + clip.height).toBeLessThanOrEqual(viewport.height);
+      // The result is already visible and its rectangle is stable. A viewport clip
+      // preserves the complete panel without element scrolling or viewport resizing.
+      await host.screenshot({
         path: info.outputPath(`avalon-${count}-result.png`),
+        clip,
       });
       checkpoint = '재경기 · 로비';
       await host.getByTestId('rematch').click();
