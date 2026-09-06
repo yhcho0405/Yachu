@@ -2,6 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import type { ServerMessage } from '../shared/protocol';
 import {
   connect,
+  addComputer,
   depart,
   disconnect,
   expireGrace,
@@ -14,14 +15,24 @@ import {
 import { cryptoDie, requireSecret } from './crypto';
 import { RoomStore } from './store';
 import { failure, json } from './response';
-import { MAX_BODY_BYTES, parseCommand, readJson, requireOrigin } from './validation';
+import {
+  MAX_BODY_BYTES,
+  parseCommand,
+  readClientProtocol,
+  readJson,
+  requireGameProtocol,
+  requireOrigin,
+  type ClientProtocol,
+} from './validation';
 import type { AuthSession, Env } from './types';
+import type { GameType } from '../shared/games';
 
 interface Connection {
   playerId: string;
   sessionKey: string;
   connectionId: string;
   expiresAt: number;
+  protocolVersion?: ClientProtocol;
 }
 export class GameRoom extends DurableObject<Env> {
   private store: RoomStore;
@@ -39,12 +50,12 @@ export class GameRoom extends DurableObject<Env> {
       this.store.transaction(() => {
         const room = this.store.load();
         if (!room) return;
-        let changed = false;
         for (const [id, auth] of Object.entries(room.members)) {
           if (auth.connectionId && !live.has(auth.connectionId))
-            changed = disconnect(room, id, auth.connectionId, Date.now()) || changed;
+            disconnect(room, id, auth.connectionId, Date.now());
         }
-        if (changed) this.store.save(room);
+        // Persist the validated v1-to-v2 conversion in this same transaction.
+        this.store.save(room);
       });
       await this.schedule();
     });
@@ -88,6 +99,9 @@ export class GameRoom extends DurableObject<Env> {
     }
     const deadlines = [
       room.state.expiresAt,
+      ...(room.state.gameType === 'tikatuka' && room.state.aiDueAt !== null
+        ? [room.state.aiDueAt]
+        : []),
       ...room.state.players.flatMap((player) =>
         player.graceDeadline === null ? [] : [player.graceDeadline],
       ),
@@ -99,6 +113,19 @@ export class GameRoom extends DurableObject<Env> {
     await this.ctx.storage.setAlarm(Math.max(Date.now() + 1, Math.min(...deadlines)));
   }
   private send(socket: WebSocket, message: ServerMessage): void {
+    if (message.state) {
+      const attachment = socket.deserializeAttachment() as Connection | null;
+      try {
+        requireGameProtocol(message.state.gameType, attachment?.protocolVersion);
+      } catch (error) {
+        message = {
+          type: 'error',
+          code: 'PROTOCOL_REFRESH',
+          error: (error as GameError).message,
+          ...(message.requestId ? { requestId: message.requestId } : {}),
+        };
+      }
+    }
     try {
       socket.send(JSON.stringify(message));
     } catch {
@@ -135,9 +162,14 @@ export class GameRoom extends DurableObject<Env> {
     playerId: string,
     requestId?: string,
     authenticated = true,
+    clientProtocol?: ClientProtocol,
   ): ServerMessage {
     const room = this.store.load();
+    const compatible =
+      room &&
+      (clientProtocol === 2 || (clientProtocol === undefined && room.state.gameType === 'yacht'));
     const permitted =
+      compatible &&
       authenticated &&
       !(error instanceof GameError && error.code === 'UNAUTHORIZED') &&
       room &&
@@ -160,19 +192,35 @@ export class GameRoom extends DurableObject<Env> {
     try {
       session = await this.auth(key);
       const path = new URL(request.url).pathname;
+      const clientProtocol = readClientProtocol(request);
       const now = Date.now();
       const beforeMaintenance = this.store.load();
+      if (beforeMaintenance) requireGameProtocol(beforeMaintenance.state.gameType, clientProtocol);
       const maintained = this.maintain(now);
       const maintenanceChanged =
         beforeMaintenance?.state.version !== maintained?.state.version ||
         beforeMaintenance?.state.presenceVersion !== maintained?.state.presenceVersion;
       if (path === '/internal/create') {
-        const body = (await readJson(request)) as { roomId: string; code: string };
+        const body = (await readJson(request)) as {
+          roomId: string;
+          code: string;
+          gameType: GameType;
+          solo: boolean;
+        };
+        requireGameProtocol(body.gameType, clientProtocol);
         this.store.transaction(() => {
           this.store.assertNotRevoked(key);
           if (this.store.load()) throw new GameError('ROOM_EXISTS', '이미 만들어진 방입니다.');
-          const room = newRoom(body.roomId, body.code, now, () => crypto.randomUUID());
+          const room = newRoom(
+            body.roomId,
+            body.code,
+            now,
+            () => crypto.randomUUID(),
+            body.gameType,
+          );
           joinRoom(room, session!.playerId, session!.nickname, key, now);
+          if (body.gameType === 'tikatuka' && body.solo)
+            addComputer(room, now, () => crypto.randomUUID());
           this.store.save(room);
         });
       } else if (path === '/internal/join') {
@@ -224,6 +272,7 @@ export class GameRoom extends DurableObject<Env> {
               sessionKey: key,
               connectionId,
               expiresAt: session!.expiresAt,
+              protocolVersion: clientProtocol,
             } satisfies Connection);
             await this.schedule();
             this.broadcast();
@@ -246,7 +295,14 @@ export class GameRoom extends DurableObject<Env> {
           });
         } catch (error) {
           return json(
-            this.errorMessage(error, key, session.playerId, command.requestId),
+            this.errorMessage(
+              error,
+              key,
+              session.playerId,
+              command.requestId,
+              true,
+              clientProtocol,
+            ),
             error instanceof GameError ? error.status : 503,
           );
         }
@@ -300,6 +356,7 @@ export class GameRoom extends DurableObject<Env> {
       const room = this.maintain(Date.now());
       if (!room || room.members[session.playerId]?.connectionId !== a.connectionId)
         throw new GameError('CONNECTION_REPLACED', '현재 연결에서 다시 접속해 주세요.', 403);
+      requireGameProtocol(room.state.gameType, a.protocolVersion);
       let value: unknown;
       try {
         value = JSON.parse(message) as unknown;
@@ -320,7 +377,14 @@ export class GameRoom extends DurableObject<Env> {
     } catch (error) {
       this.send(
         socket,
-        this.errorMessage(error, a.sessionKey, a.playerId, requestId, authenticated),
+        this.errorMessage(
+          error,
+          a.sessionKey,
+          a.playerId,
+          requestId,
+          authenticated,
+          a.protocolVersion,
+        ),
       );
       if (
         error instanceof GameError &&
@@ -375,6 +439,7 @@ export class GameRoom extends DurableObject<Env> {
         .map((a) => a.sessionKey),
     );
     for (const key of expiredKeys) await this.revoke(key);
+    this.store.processComputer({ now, die: cryptoDie, uuid: () => crypto.randomUUID() });
     this.store.transaction(() => {
       this.store.cleanup(now);
     });

@@ -402,8 +402,6 @@ export function createDiceScene(container: HTMLElement, options: SceneOptions): 
       ctx.fillStyle = 'rgba(218,217,175,.35)';
       ctx.font = '28px Georgia';
       ctx.fillText('D I C E   A T E L I E R', size / 2, size / 2 - 13);
-      ctx.font = '12px sans-serif';
-      ctx.fillText('A  L I T T L E  L U C K  ·  A  G O O D  T I M E', size / 2, size / 2 + 20);
       ctx.strokeStyle = 'rgba(218,217,175,.24)';
       ctx.lineWidth = 1;
       ctx.beginPath();

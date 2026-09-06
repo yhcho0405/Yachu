@@ -5,7 +5,18 @@ import { GameError } from './engine';
 import { failure, json, SECURITY_HEADERS } from './response';
 import { SESSION_MS } from './registry';
 import type { AuthSession, Env } from './types';
-import { exactKeys, nickname, object, readJson, requireOrigin, roomCode } from './validation';
+import {
+  CLIENT_PROTOCOL_HEADER,
+  exactKeys,
+  nickname,
+  object,
+  parseCreateRoom,
+  readClientProtocol,
+  readJson,
+  requireGameProtocol,
+  requireOrigin,
+  roomCode,
+} from './validation';
 export { GameRoom } from './room';
 export { SessionRegistry } from './registry';
 
@@ -103,9 +114,11 @@ async function route(request: Request, env: Env): Promise<Response> {
     )
       throw new GameError('BAD_CSRF', '요청 인증을 확인해 주세요.', 403);
   }
+  const clientProtocol = readClientProtocol(request);
   async function forward(roomId: string, action: string, body?: unknown): Promise<Response> {
     const headers = new Headers();
     headers.set('x-dice-session-key', key!);
+    if (clientProtocol !== undefined) headers.set(CLIENT_PROTOCOL_HEADER, String(clientProtocol));
     const origin = request.headers.get('origin');
     if (origin) headers.set('origin', origin);
     if (request.headers.get('upgrade')) headers.set('upgrade', request.headers.get('upgrade')!);
@@ -121,10 +134,11 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (url.pathname === '/api/rooms' && request.method === 'POST') {
     await rate(`create:${key}`, 6, 3_600_000);
     await rate(`create-ip:${ipHash}`, 30, 3_600_000);
-    exactKeys(object(await readJson(request)), []);
+    const options = parseCreateRoom(await readJson(request));
+    requireGameProtocol(options.gameType, clientProtocol);
     const room = await registry.reserveRoom();
     await registry.trackRoom(key, room.roomId);
-    return forward(room.roomId, 'create', room);
+    return forward(room.roomId, 'create', { ...room, ...options });
   }
   if (url.pathname === '/api/join' && request.method === 'POST') {
     await rate(`join:${key}`, 30);

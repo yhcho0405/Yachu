@@ -5,11 +5,11 @@
 GitHub Actions의 main push만 사용한다. 등록된 세 Secrets의 값을 로컬에서 조회할 필요가 없다. Actions는 고정 SHA의 공식checkout/setup-node/upload-artifact를 사용하며 contents:read만 요청한다. 운영 배포 실행은 충돌하지 않게 직렬화하고, 배포 직전에main 최신 SHA와 현재SHA를 비교한다. 더 오래된 커밋이면 배포 전에 실패한다.
 
 1. npm ci → 타입/정적/단위 검사.
-2. 같은 `wrangler.jsonc`에서 파생한 실제 workerd 로컬 서버에서 Chromium 1~4인 전 경기 및 Firefox UI 검사.
-3. 실제 workerd 재시작 후 세션/턴/주사위/중복처리 복구 검사.
+2. 같은 `wrangler.jsonc`에서 파생한 실제 workerd 로컬 서버에서 Chromium 야추1~4인, 티카투카2인·컴퓨터 전 경기와 재경기, 게임 전환·격리 및 Firefox UI 검사.
+3. 실제 workerd 재시작 후 야추 세션/턴/주사위/중복처리와 티카투카 공격 보너스·재굴림 후보·컴퓨터 Alarm 복구 검사.
 4. 빌드한 클라이언트와 Worker에 같은Git SHA를 넣는다. 이 검사된 코드를 wrangler deploy로 올린다.
 5. --secrets-file로 SESSION_SECRET을 같은 업로드의 런타임비밀로 전달한다. 파일을 출력하지 않으며 임시파일은 finally에서 삭제한다.
-6. Wrangler가 출력한 workers.dev URL에서 동일한 정상 사용자 브라우저 검사를 재실행한다.
+6. Wrangler가 출력한 workers.dev URL에서 두 게임의 동일한 정상 사용자 브라우저 검사를 재실행한다. 부정 요청 검사는 운영에서 실행하지 않는다.
 7. Actions요약에 URL/SHA/상태를 기록하고 쿠키 없는 스크린샷과 보고서를7일 보관한다.
 
 CLOUDFLARE_API_TOKEN과 계정ID는 Worker 런타임으로 전달하지 않는다. SESSION_SECRET은 배포마다 바꾸지 않는다. 기존 비밀과 Durable Object 바인딩/마이그레이션을 보존한다. 실제값 없는 예시는 루트.env.example에만 둔다.
@@ -25,7 +25,7 @@ CLOUDFLARE_API_TOKEN과 계정ID는 Worker 런타임으로 전달하지 않는�
 - 변경을검증한 뒤 main에 반영한다. DO 클래스이름이나 v1 마이그레이션을 재작성하지 않는다. 스키마 변경은 추가마이그레이션과 이전상태 읽기 지원으로 진행한다.
 - /api/health와/version.json의commit이 같은지 확인한다. API는no-store다. SPA 직접링크도 동작하고 /api/*는SPA로 내려가지 않는다.
 - 오류가 생기면 Actions로그의 실패단계를 확인한다. 토큰/쿠키/환경변수 전체를 로그에출력하지 않는다.
-- 일반 코드복구는 이전정상커밋의 변경을되돌리는 새커밋을main에 반영하여 같은검증과배포경로로 수행한다. SQLite는 유지한다. DO 마이그레이션은 되돌리지 않는다.
+- 일반 코드복구는 저장 형식을 읽을 수 있는 수정 커밋을main에 반영하여 같은검증과배포경로로 수행한다. SQLite는 유지하고 DO 마이그레이션은 되돌리지 않는다. 멀티게임 형식2 저장 후에는 이를 모르는 야추 전용 cdf76f0 코드로 그대로 복귀하면 안 된다. 문제 기능을 수정하거나 노출을 제한하더라도 형식2와 기존 야추 읽기 지원을 유지한다.
 - Cloudflare PITR을 이용한 저장소복원은 현재경기를 되돌릴 수 있는 운영작업이므로 정상코드롤백과 구별한다. 복구시점과 영향방을 확인한 뒤 계정관리자가 수행한다.
 - 세션비밀 교체는 모든기존자격증명 복구를 막으므로 사건대응이 필요할 때만 계획한다. 평상시배포는 기존값을 유지한다.
 
@@ -38,3 +38,9 @@ CLOUDFLARE_API_TOKEN과 계정ID는 Worker 런타임으로 전달하지 않는�
 - [SQLite transactionSync](https://developers.cloudflare.com/durable-objects/api/sqlite-storage-api/)
 - [WebSocket Hibernation](https://developers.cloudflare.com/durable-objects/best-practices/websockets/)
 - [Durable Objects 요금과 무료한도](https://developers.cloudflare.com/durable-objects/platform/pricing/)
+
+## 기존 경기의 배포 호환성
+
+배포 전에 기존 클라이언트로 야추 방을 열어 자리·경기 ID·점수·눈을 기록하고 연결을 유지한다. 새 버전 배포 후 같은 방에서 기존 명령을 확인하고, 새로고침 후 같은 세션과 자리가 유지되는지 확인한다. 이를 로컬 fixture 검사만으로 운영 배포에서 확인했다고 표현하지 않는다. 수행한 실제 결과·커밋·Actions 링크는 검증 기록에 남긴다.
+
+원작 대조가 끝나지 않은 티카투카 규칙은 문서의 미확정 상태를 유지한다. CI 통과가 원작 전체 규칙 확인을 대신하지 않는다.

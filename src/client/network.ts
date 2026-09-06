@@ -1,3 +1,5 @@
+import { PROTOCOL_VERSION, SCHEMA_VERSION } from '../shared/protocol';
+import { isGameType, type GameType } from '../shared/games';
 import type { Command, Intent, RoomState, ServerMessage, Session } from '../shared/protocol';
 
 export type Connection = 'connecting' | 'online' | 'reconnecting' | 'offline' | 'replaced';
@@ -5,6 +7,7 @@ interface QueueItem {
   intent: Intent;
   roomCode: string;
   gameId: string;
+  gameType?: GameType;
   turnId: string;
   command?: Command;
 }
@@ -14,6 +17,7 @@ export interface ClientView {
   connection: Connection;
   loading: boolean;
   error: string | null;
+  reloadRequired: boolean;
   queue: readonly QueueItem[];
 }
 const read = (key: string) => {
@@ -55,6 +59,7 @@ export class GameClient {
     connection: 'connecting',
     loading: true,
     error: null,
+    reloadRequired: false,
     queue: [],
   };
   private listeners = new Set<() => void>();
@@ -79,6 +84,17 @@ export class GameClient {
     this.listeners.forEach((fn) => fn());
   }
   clearError = () => this.patch({ error: null });
+  private requireReload(message: string) {
+    if (this.retry) {
+      clearTimeout(this.retry);
+      this.retry = null;
+    }
+    if (this.commandRetry) {
+      clearTimeout(this.commandRetry);
+      this.commandRetry = null;
+    }
+    this.patch({ reloadRequired: true, error: message });
+  }
   private persist() {
     try {
       if (this.queue.length) sessionStorage.setItem('atelier.pending', JSON.stringify(this.queue));
@@ -95,6 +111,7 @@ export class GameClient {
         method,
         credentials: 'same-origin',
         headers: {
+          'X-Game-Protocol': String(PROTOCOL_VERSION),
           ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
           ...(method !== 'GET' && this.view.session
             ? { 'X-CSRF-Token': this.view.session.csrfToken }
@@ -106,7 +123,7 @@ export class GameClient {
       const result = (await response.json()) as T & { error?: string; code?: string };
       if (!response.ok)
         throw new RequestError(
-          result.error || '요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.',
+          result.error || '요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.',
           result.code || 'REQUEST_FAILED',
           response.status,
         );
@@ -115,7 +132,18 @@ export class GameClient {
       clearTimeout(timeout);
     }
   }
+  private compatible(state: RoomState): boolean {
+    if (
+      isGameType(state.gameType) &&
+      state.protocolVersion === PROTOCOL_VERSION &&
+      state.schemaVersion === SCHEMA_VERSION
+    )
+      return true;
+    this.requireReload('화면을 새로고침한 뒤 계속해 주세요. 현재 방과 참가 자리는 유지됩니다.');
+    return false;
+  }
   private accept(state: RoomState) {
+    if (!this.compatible(state)) return;
     const old = this.view.room;
     if (
       old &&
@@ -150,7 +178,7 @@ export class GameClient {
       if (error instanceof RequestError && error.status === 401) {
         if (this.view.session || read('atelier.room')) this.expireSession();
       } else
-        this.patch({ error: '연결을 확인해 주세요. 다시 연결하면 진행 중인 게임을 복구해요.' });
+        this.patch({ error: '연결을 확인해 주세요. 다시 연결하면 진행 중인 경기를 복구합니다.' });
     } finally {
       this.patch({
         loading: false,
@@ -178,11 +206,14 @@ export class GameClient {
     save('atelier.nickname', session.nickname);
     this.patch({ session });
   }
-  create = async (nickname: string, solo: boolean) => {
+  create = async (nickname: string, solo: boolean, gameType: GameType = 'yacht') => {
     this.patch({ loading: true, error: null });
     try {
       await this.identify(nickname);
-      const { state } = await this.request<{ state: RoomState }>('/api/rooms', 'POST', {});
+      const { state } = await this.request<{ state: RoomState }>('/api/rooms', 'POST', {
+        gameType,
+        solo,
+      });
       this.enter(state);
       if (solo) this.enqueue({ type: 'start' });
     } catch (error) {
@@ -206,6 +237,11 @@ export class GameClient {
     }
   };
   private enter(state: RoomState, restore = false) {
+    if (!this.compatible(state)) {
+      if (typeof state.code === 'string' && /^[A-Z2-9]{8}$/.test(state.code))
+        save('atelier.room', state.code);
+      return;
+    }
     this.roomGeneration++;
     this.socket?.close();
     this.socket = null;
@@ -226,12 +262,18 @@ export class GameClient {
     save('atelier.room', state.code);
     this.persist();
     history.replaceState(null, '', `/?room=${state.code}`);
-    this.patch({ room: state, error: null });
+    this.patch({ room: state, error: null, reloadRequired: false });
     this.connect();
     void this.drain();
   }
   private connect() {
-    if (this.destroyed || !this.view.room || this.view.connection === 'replaced') return;
+    if (
+      this.destroyed ||
+      this.view.reloadRequired ||
+      !this.view.room ||
+      this.view.connection === 'replaced'
+    )
+      return;
     if (this.retry) clearTimeout(this.retry);
     const old = this.socket;
     this.socket = null;
@@ -243,6 +285,7 @@ export class GameClient {
     const generation = this.roomGeneration;
     const url = new URL(`/api/rooms/${this.view.room.code}/ws`, location.href);
     url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    url.searchParams.set('protocolVersion', String(PROTOCOL_VERSION));
     this.patch({ connection: this.attempts ? 'reconnecting' : 'connecting' });
     const socket = new WebSocket(url);
     this.socket = socket;
@@ -266,13 +309,13 @@ export class GameClient {
         if (message.type === 'error')
           this.report(
             new RequestError(
-              message.error || '요청을 처리하지 못했어요.',
+              message.error || '요청을 처리하지 못했습니다.',
               message.code || 'COMMAND_FAILED',
               message.code === 'UNAUTHORIZED' ? 401 : message.code === 'ROOM_NOT_FOUND' ? 404 : 403,
             ),
           );
       } catch {
-        this.patch({ error: '상태를 다시 확인하고 있어요.' });
+        this.patch({ error: '경기 상태를 다시 확인하고 있습니다.' });
         void this.refresh();
       }
     };
@@ -314,13 +357,19 @@ export class GameClient {
   }
   enqueue(intent: Intent) {
     const state = this.view.room;
-    if (!state) return;
+    if (!state || this.view.reloadRequired) return;
     if (intent.type !== 'hold' && this.queue.some((q) => q.intent.type === intent.type)) return;
     if (this.queue.length >= 20) {
-      this.patch({ error: '선택을 저장하고 있어요. 잠시만 기다려 주세요.' });
+      this.patch({ error: '선택을 처리하고 있습니다. 잠시 기다려 주세요.' });
       return;
     }
-    this.queue.push({ intent, roomCode: state.code, gameId: state.gameId, turnId: state.turnId });
+    this.queue.push({
+      intent,
+      roomCode: state.code,
+      gameId: state.gameId,
+      gameType: state.gameType,
+      turnId: state.turnId,
+    });
     this.persist();
     this.patch({ error: null });
     void this.drain();
@@ -328,6 +377,7 @@ export class GameClient {
   private async drain() {
     if (
       this.processing ||
+      this.view.reloadRequired ||
       this.destroyed ||
       !navigator.onLine ||
       this.view.connection === 'replaced' ||
@@ -342,6 +392,7 @@ export class GameClient {
     try {
       while (
         this.queue.length &&
+        !this.view.reloadRequired &&
         this.view.room &&
         navigator.onLine &&
         this.socket?.readyState === WebSocket.OPEN
@@ -354,10 +405,23 @@ export class GameClient {
           this.patch({});
           continue;
         }
+        const gameAction = !(['ready', 'start', 'rematch', 'leave'] as string[]).includes(
+          entry.intent.type,
+        );
+        const wrongGame = entry.gameType !== undefined && entry.gameType !== state.gameType;
+        const wrongAction =
+          gameAction && entry.intent.type.startsWith('tika_') !== (state.gameType === 'tikatuka');
+        if (!entry.command && (wrongGame || wrongAction)) {
+          this.queue.shift();
+          this.persist();
+          this.patch({});
+          continue;
+        }
         // An unsent intent cannot cross a turn or a rematch. An already sent request must be resolved with its original ID.
         if (
           !entry.command &&
-          (['roll', 'hold', 'score'] as string[]).includes(entry.intent.type) &&
+          ((['roll', 'hold', 'score'] as string[]).includes(entry.intent.type) ||
+            entry.intent.type.startsWith('tika_')) &&
           (entry.gameId !== state.gameId || entry.turnId !== state.turnId)
         ) {
           this.queue.shift();
@@ -372,7 +436,9 @@ export class GameClient {
             gameId: state.gameId,
             turnId: state.turnId,
             expectedVersion: state.version,
-          };
+            gameType: state.gameType,
+            protocolVersion: PROTOCOL_VERSION,
+          } as Command;
           this.persist();
         }
         try {
@@ -385,14 +451,14 @@ export class GameClient {
           if (message.state) this.accept(message.state);
           if (message.type === 'error')
             throw new RequestError(
-              message.error || '요청을 처리하지 못했어요.',
+              message.error || '요청을 처리하지 못했습니다.',
               message.code || 'COMMAND_FAILED',
               400,
             );
           this.queue.shift();
           this.persist();
           this.patch({
-            error: null,
+            error: this.view.reloadRequired ? this.view.error : null,
             ...(navigator.onLine && this.socket?.readyState === WebSocket.OPEN
               ? { connection: 'online' as const }
               : {}),
@@ -413,7 +479,7 @@ export class GameClient {
           // The server may already have committed. Keep the exact envelope and retry, including after reload.
           this.patch({
             connection: navigator.onLine ? 'reconnecting' : 'offline',
-            error: '응답을 기다리고 있어요. 연결이 돌아오면 같은 요청의 결과를 확인해요.',
+            error: '응답을 기다리고 있습니다. 연결이 복구되면 요청 결과를 확인합니다.',
           });
           this.commandRetry = setTimeout(() => {
             this.commandRetry = null;
@@ -428,6 +494,10 @@ export class GameClient {
   }
   private report(error: unknown) {
     if (error instanceof RequestError) {
+      if (error.code === 'PROTOCOL_REFRESH') {
+        this.requireReload('화면을 새로고침한 뒤 계속해 주세요. 현재 방과 참가 자리는 유지됩니다.');
+        return;
+      }
       if (error.status === 401) {
         this.expireSession();
         return;
@@ -439,12 +509,12 @@ export class GameClient {
       ) {
         const message =
           error.code === 'ROOM_NOT_FOUND'
-            ? '방이 종료되었거나 만료되었어요. 새 방을 만들거나 다른 초대 코드로 참가해 주세요.'
+            ? '방이 종료되었거나 만료되었습니다. 새 방을 만들거나 다른 초대 코드로 참가해 주세요.'
             : error.code === 'GRACE_EXPIRED'
-              ? '재접속 대기 시간이 끝나 이번 테이블의 참여가 종료되었어요. 같은 이름으로 새 게임을 시작할 수 있어요.'
+              ? '재접속 대기 시간이 끝나 현재 경기에서 나갔습니다. 같은 이름으로 새 게임을 시작할 수 있습니다.'
               : error.code === 'FORFEITED'
-                ? '이번 경기는 기권 처리되었어요. 같은 이름으로 새 게임을 시작할 수 있어요.'
-                : '이 테이블의 참여가 종료되었어요. 같은 이름으로 새 방을 만들거나 초대 코드로 참가해 주세요.';
+                ? '이번 경기는 기권 처리되었습니다. 같은 이름으로 새 게임을 시작할 수 있습니다.'
+                : '현재 방에서 나갔습니다. 같은 이름으로 새 방을 만들거나 초대 코드로 참가해 주세요.';
         this.finishLeave();
         this.patch({ loading: false, error: message });
         return;
@@ -459,7 +529,7 @@ export class GameClient {
     this.patch({
       session: null,
       loading: false,
-      error: '게스트 세션이 만료되었어요. 이름을 확인하고 새로 시작해 주세요.',
+      error: '게스트 세션이 만료되었습니다. 이름을 확인하고 새로 시작해 주세요.',
     });
   }
   private finishLeave() {

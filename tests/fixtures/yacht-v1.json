@@ -1,0 +1,98 @@
+{
+  "members": {
+    "legacy-player-0": {
+      "sessionKey": "legacy-session-0",
+      "connectionId": null,
+      "disconnectedAt": 1788693152932,
+      "graceRemaining": 120000,
+      "departed": false
+    }
+  },
+  "state": {
+    "roomId": "legacy-room-0001",
+    "code": "ABCDEFGH",
+    "gameId": "legacy-game-0001",
+    "rulesVersion": "nintendo-yacht-12-v1",
+    "phase": "playing",
+    "version": 3,
+    "presenceVersion": 3,
+    "hostId": "legacy-player-0",
+    "players": [
+      {
+        "id": "legacy-player-0",
+        "nickname": "이전 플레이어 1",
+        "seat": 0,
+        "ready": false,
+        "connected": false,
+        "forfeited": false,
+        "graceDeadline": 1788693272932,
+        "scores": {
+          "aces": null,
+          "deuces": null,
+          "threes": null,
+          "fours": null,
+          "fives": null,
+          "sixes": null,
+          "choice": null,
+          "fourKind": null,
+          "fullHouse": null,
+          "smallStraight": null,
+          "largeStraight": null,
+          "yacht": null
+        },
+        "upper": 0,
+        "bonus": 0,
+        "total": 0
+      }
+    ],
+    "turnPlayerId": "legacy-player-0",
+    "turnId": "legacy-turn-0001",
+    "round": 1,
+    "dice": [
+      {
+        "id": 0,
+        "value": 2,
+        "held": false
+      },
+      {
+        "id": 1,
+        "value": 4,
+        "held": false
+      },
+      {
+        "id": 2,
+        "value": 5,
+        "held": false
+      },
+      {
+        "id": 3,
+        "value": 5,
+        "held": false
+      },
+      {
+        "id": 4,
+        "value": 6,
+        "held": false
+      }
+    ],
+    "rolls": 1,
+    "inputAfter": 1788693153744,
+    "previews": {
+      "aces": 0,
+      "deuces": 2,
+      "threes": 0,
+      "fours": 4,
+      "fives": 10,
+      "sixes": 6,
+      "choice": 22,
+      "fourKind": 0,
+      "fullHouse": 0,
+      "smallStraight": 0,
+      "largeStraight": 0,
+      "yacht": 0
+    },
+    "results": [],
+    "updatedAt": 1788693152744,
+    "expiresAt": 1788779552744
+  }
+}

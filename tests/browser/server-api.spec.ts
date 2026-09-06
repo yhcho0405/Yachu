@@ -1,5 +1,5 @@
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';
-import type { Command, Intent, RoomState, ServerMessage, Session } from '../../src/shared/protocol';
+import type { LegacyYachtCommand as Command, YachtIntent as Intent, YachtRoomState as RoomState, ServerMessage, Session } from '../../src/shared/protocol';
 
 type Guest = { context: BrowserContext; session: Session; cookie: string; page?: Page };
 declare global {
@@ -177,7 +177,8 @@ test('local workerd authority: independent credentials, seat race, WebSocket com
     expect(invalid.status()).toBe(400);
     const roll = cmd(await snapshot(host, code), { type: 'roll' });
     const first = await sendSocket(host.page!, roll);
-    expect(first.state?.rolls).toBe(1);
+    if (first.state?.gameType !== 'yacht') throw new Error('Expected a Yacht roll');
+    expect(first.state.rolls).toBe(1);
     const repeated = await post(host, `/api/rooms/${code}/command`, roll, origin);
     expect(repeated.status()).toBe(200);
     expect(((await repeated.json()) as ServerMessage).state).toEqual(first.state);

@@ -1,3 +1,10 @@
+import type { GameType } from './games';
+import type { TikatukaIntent, TikatukaRoomState } from './tikatuka';
+export type { GameType } from './games';
+export type { TikatukaIntent, TikatukaRoomState } from './tikatuka';
+export const PROTOCOL_VERSION = 2 as const;
+export const SCHEMA_VERSION = 2 as const;
+
 export const CATEGORIES = [
   'aces',
   'deuces',
@@ -28,14 +35,17 @@ export const LABELS: Record<Category, string> = {
   yacht: '야추',
 };
 export type Scores = Record<Category, number | null>;
-export interface Player {
+export interface CommonPlayer {
   id: string;
+  kind: 'human' | 'computer';
   nickname: string;
   seat: number;
   ready: boolean;
   connected: boolean;
   forfeited: boolean;
   graceDeadline: number | null;
+}
+export interface Player extends CommonPlayer {
   scores: Scores;
   upper: number;
   bonus: number;
@@ -46,7 +56,10 @@ export interface Dice {
   value: number;
   held: boolean;
 }
-export interface RoomState {
+export interface RoomBase<G extends GameType, P extends CommonPlayer> {
+  schemaVersion: typeof SCHEMA_VERSION;
+  protocolVersion: typeof PROTOCOL_VERSION;
+  gameType: G;
   roomId: string;
   code: string;
   gameId: string;
@@ -55,38 +68,50 @@ export interface RoomState {
   version: number;
   presenceVersion: number;
   hostId: string;
-  players: Player[];
+  players: P[];
   turnPlayerId: string | null;
   turnId: string;
-  round: number;
-  dice: Dice[];
-  rolls: number;
   inputAfter: number;
-  previews: Record<Category, number>;
   results: { playerId: string; rank: number; total: number; forfeited: boolean }[];
   updatedAt: number;
   expiresAt: number;
 }
+export interface YachtRoomState extends RoomBase<'yacht', Player> {
+  round: number;
+  dice: Dice[];
+  rolls: number;
+  previews: Record<Category, number>;
+}
+export type RoomState = YachtRoomState | TikatukaRoomState;
 export interface Session {
   playerId: string;
   nickname: string;
   csrfToken: string;
   expiresAt: number;
 }
-export type Intent =
-  | { type: 'ready'; ready: boolean }
-  | { type: 'start' }
+export type CommonIntent =
+  { type: 'ready'; ready: boolean } | { type: 'start' } | { type: 'rematch' } | { type: 'leave' };
+export type YachtIntent =
+  | CommonIntent
   | { type: 'hold'; held: boolean[] }
   | { type: 'roll' }
-  | { type: 'score'; category: Category }
-  | { type: 'rematch' }
-  | { type: 'leave' };
-export type Command = Intent & {
+  | { type: 'score'; category: Category };
+export type Intent = YachtIntent | TikatukaIntent;
+export interface CommandEnvelope {
   requestId: string;
   gameId: string;
   expectedVersion: number;
   turnId: string;
-};
+}
+export type LegacyYachtCommand = CommandEnvelope &
+  YachtIntent & { gameType?: never; protocolVersion?: never };
+/** The legacy envelope is valid only for the existing Yacht protocol. */
+export type Command = CommandEnvelope &
+  (
+    | (YachtIntent & { gameType: 'yacht'; protocolVersion: 2 })
+    | ((CommonIntent | TikatukaIntent) & { gameType: 'tikatuka'; protocolVersion: 2 })
+    | LegacyYachtCommand
+  );
 export interface ServerMessage {
   type: 'state' | 'result' | 'error' | 'replaced';
   state?: RoomState;

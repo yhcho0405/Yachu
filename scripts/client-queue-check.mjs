@@ -2,9 +2,15 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import ts from 'typescript';
 import { randomUUID } from 'node:crypto';
-const source = ts.transpileModule(fs.readFileSync('src/client/network.ts', 'utf8'), {
-  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
-}).outputText;
+const transpile = (path) =>
+  ts.transpileModule(fs.readFileSync(path, 'utf8'), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
+  }).outputText;
+const moduleURL = (source) =>
+  `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`;
+const source = transpile('src/client/network.ts')
+  .replace("'../shared/protocol'", JSON.stringify(moduleURL(transpile('src/shared/protocol.ts'))))
+  .replace("'../shared/games'", JSON.stringify(moduleURL(transpile('src/shared/games.ts'))));
 const { GameClient } = await import(
   `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`
 );
@@ -38,7 +44,8 @@ class FakeSocket {
   static OPEN = 1;
   static all = [];
   readyState = 0;
-  constructor() {
+  constructor(url) {
+    this.url = String(url);
     FakeSocket.all.push(this);
   }
   open() {
@@ -57,6 +64,9 @@ const settle = async () => {
 const reply = (data, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
 const fixture = () => ({
+  gameType: 'yacht',
+  schemaVersion: 2,
+  protocolVersion: 2,
   roomId: 'room-id',
   code: 'ABCDEFGH',
   gameId: 'game-id',
@@ -69,6 +79,11 @@ const fixture = () => ({
 const session = { playerId: 'player-id', nickname: 'tester', csrfToken: 'token' };
 function mockServer(state, commandHandler) {
   globalThis.fetch = async (url, options = {}) => {
+    assert.equal(
+      options.headers?.['X-Game-Protocol'],
+      '2',
+      'new HTTP requests explicitly advertise compatibility',
+    );
     if (url === '/api/session') return reply(session);
     if (url === '/api/rooms') return reply({ state });
     if (url.endsWith('/command')) return commandHandler(JSON.parse(options.body));
@@ -98,6 +113,7 @@ install();
   await client.create('tester', true);
   await settle();
   assert.equal(commands.length, 0, 'solo start must wait for socket OPEN');
+  assert.equal(new URL(FakeSocket.all.at(-1).url).searchParams.get('protocolVersion'), '2');
   FakeSocket.all.at(-1).open();
   await settle();
   assert.equal(commands.length, 1);
@@ -293,4 +309,146 @@ install();
 }
 console.log(
   'PASS: 403 terminal room codes and 404 ROOM_NOT_FOUND preserve valid session, clear room/queue, and cancel reconnect; close 1006 refreshes auth; boot cleanup and stale refresh guard.',
+);
+
+install();
+{
+  const state = { ...fixture(), gameType: 'tikatuka', stage: 'lobby', phase: 'lobby' };
+  const created = [],
+    commands = [];
+  globalThis.fetch = async (url, options = {}) => {
+    assert.equal(
+      options.headers?.['X-Game-Protocol'],
+      '2',
+      'new HTTP requests explicitly advertise compatibility',
+    );
+    if (url === '/api/session') return reply(session);
+    if (url === '/api/rooms') {
+      created.push(JSON.parse(options.body));
+      return reply({ state });
+    }
+    if (url.endsWith('/command')) {
+      commands.push(JSON.parse(options.body));
+      return reply({
+        type: 'result',
+        state: { ...state, phase: 'playing', stage: 'placing', version: 2 },
+      });
+    }
+    return reply({ state });
+  };
+  const client = new GameClient();
+  await client.create('tester', true, 'tikatuka');
+  assert.deepEqual(created, [{ gameType: 'tikatuka', solo: true }]);
+  assert.equal(commands.length, 0, 'Tika solo also waits for socket OPEN');
+  FakeSocket.all.at(-1).open();
+  await settle();
+  assert.equal(commands[0].gameType, 'tikatuka');
+  assert.equal(commands[0].protocolVersion, 2);
+  assert.equal(commands[0].type, 'start');
+  client.dispose();
+}
+install();
+{
+  let state = { ...fixture(), gameType: 'tikatuka', stage: 'placing' };
+  const commands = [];
+  const handler = (command) => {
+    commands.push(command);
+    if (commands.length === 1) {
+      state = { ...state, version: 2, turnId: 'following-turn' };
+      return reply({ error: 'uncertain response' }, 503);
+    }
+    return reply({ type: 'result', state });
+  };
+  const client = await started(state, handler);
+  client.enqueue({ type: 'tika_place', ownerId: 'player-id', lane: 1 });
+  await settle();
+  const original = commands[0];
+  client.dispose();
+  mockServer(state, handler);
+  const restored = new GameClient();
+  await restored.boot();
+  FakeSocket.all.at(-1).open();
+  await settle();
+  assert.equal(commands.length, 2);
+  assert.deepEqual(
+    commands[1],
+    original,
+    'Tika committed move retries exact original envelope after turn advances/reload',
+  );
+  assert.equal(restored.getSnapshot().queue.length, 0);
+  restored.dispose();
+}
+install();
+{
+  const state = { ...fixture(), gameType: 'tikatuka' };
+  local.set('atelier.room', state.code);
+  pending.set(
+    'atelier.pending',
+    JSON.stringify([
+      {
+        roomCode: state.code,
+        gameId: state.gameId,
+        turnId: state.turnId,
+        gameType: 'yacht',
+        intent: { type: 'roll' },
+      },
+    ]),
+  );
+  const commands = [];
+  mockServer(state, (command) => {
+    commands.push(command);
+    return reply({ type: 'result', state });
+  });
+  const client = new GameClient();
+  await client.boot();
+  FakeSocket.all.at(-1).open();
+  await settle();
+  assert.equal(commands.length, 0, 'an unsent Yacht choice cannot be assigned a Tika envelope');
+  assert.equal(client.getSnapshot().queue.length, 0);
+  client.dispose();
+}
+install();
+{
+  const state = fixture();
+  let requests = 0;
+  const client = await started(state, () => {
+    requests++;
+    return reply({ error: 'refresh required', code: 'PROTOCOL_REFRESH' }, 409);
+  });
+  client.enqueue({ type: 'roll' });
+  await settle();
+  assert.equal(client.getSnapshot().reloadRequired, true);
+  assert.deepEqual(client.getSnapshot().session, session);
+  assert.equal(client.getSnapshot().room.roomId, state.roomId);
+  assert.equal(local.get('atelier.room'), state.code);
+  assert.equal(FakeSocket.all.at(-1).readyState, 1, 'refresh notice retains current room socket');
+  client.enqueue({ type: 'roll' });
+  await settle();
+  assert.equal(requests, 1, 'new commands wait for required reload');
+  client.dispose();
+}
+for (const state of [
+  { ...fixture(), gameType: 'unknown-game' },
+  { ...fixture(), protocolVersion: 3 },
+  { ...fixture(), schemaVersion: 3 },
+]) {
+  install();
+  mockServer(state, () => {
+    throw new Error('unexpected command');
+  });
+  const client = new GameClient();
+  await client.create('tester', false);
+  assert.equal(client.getSnapshot().reloadRequired, true);
+  assert.equal(client.getSnapshot().room, null, 'unrecognized state must not render as Yacht');
+  assert.deepEqual(client.getSnapshot().session, session);
+  assert.equal(
+    local.get('atelier.room'),
+    state.code,
+    'unknown-state refresh retains recovery code',
+  );
+  assert.equal(FakeSocket.all.length, 0);
+  client.dispose();
+}
+console.log(
+  'PASS: game-authoritative create/v2 envelope; Tika exact retry across reload; unsent cross-game queue isolation; protocol refresh preserves seat/session and gates commands; unknown snapshots require refresh.',
 );

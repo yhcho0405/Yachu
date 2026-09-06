@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { CATEGORIES, type Command, type Intent } from '../src/shared/protocol';
+import {
+  CATEGORIES,
+  type LegacyYachtCommand as Command,
+  type YachtIntent as Intent,
+} from '../src/shared/protocol';
 import {
   applyCommand,
   connect,

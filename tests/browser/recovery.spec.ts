@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import type { RoomState } from '../../src/shared/protocol';
+import type { YachtRoomState as RoomState } from '../../src/shared/protocol';
 import { createPlayers, roomState } from './helpers';
 
 test('response loss then reload resolves the original roll once', async ({ browser, baseURL }) => {

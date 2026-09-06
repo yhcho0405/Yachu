@@ -12,6 +12,8 @@ import {
   canonicalCommand,
   nickname,
   parseCommand,
+  readClientProtocol,
+  requireGameProtocol,
   readJson,
   requireOrigin,
   roomCode,
@@ -161,5 +163,59 @@ describe('closed schemas and authentication primitives', () => {
     } finally {
       spy.mockRestore();
     }
+  });
+});
+
+describe('client protocol negotiation before room state delivery', () => {
+  it('keeps missing-version clients compatible with Yacht only', () => {
+    const legacy = readClientProtocol(new Request('https://play.example/api/join'));
+    expect(legacy).toBeUndefined();
+    expect(() => requireGameProtocol('yacht', legacy)).not.toThrow();
+    expect(() => requireGameProtocol('tikatuka', legacy)).toThrow('새로고침');
+  });
+  it('accepts explicit HTTP and WebSocket version 2 without changing authentication', () => {
+    const header = readClientProtocol(
+      new Request('https://play.example/api/rooms/ABCDEFGH', {
+        headers: { 'X-Game-Protocol': '2' },
+      }),
+    );
+    const socket = readClientProtocol(
+      new Request('https://play.example/api/rooms/ABCDEFGH/ws?protocolVersion=2'),
+    );
+    expect(header).toBe(2);
+    expect(socket).toBe(2);
+    for (const game of ['yacht', 'tikatuka'] as const)
+      expect(() => requireGameProtocol(game, header)).not.toThrow();
+  });
+  it('requests refresh for every explicit unknown version and ambiguous WS query', () => {
+    for (const version of ['', '1', '3', '2, 3']) {
+      expect(() =>
+        readClientProtocol(
+          new Request('https://play.example/api/join', { headers: { 'X-Game-Protocol': version } }),
+        ),
+      ).toThrow('새로고침');
+      expect(() =>
+        readClientProtocol(
+          new Request(
+            'https://play.example/api/rooms/ABCDEFGH/ws?protocolVersion=' +
+              encodeURIComponent(version),
+          ),
+        ),
+      ).toThrow('새로고침');
+    }
+    expect(() =>
+      readClientProtocol(
+        new Request(
+          'https://play.example/api/rooms/ABCDEFGH/ws?protocolVersion=2&protocolVersion=2',
+        ),
+      ),
+    ).toThrow('새로고침');
+    expect(() =>
+      readClientProtocol(
+        new Request('https://play.example/api/rooms/ABCDEFGH/ws?protocolVersion=3', {
+          headers: { 'X-Game-Protocol': '2' },
+        }),
+      ),
+    ).toThrow('새로고침');
   });
 });

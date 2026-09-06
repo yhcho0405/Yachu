@@ -1,18 +1,21 @@
-import { CATEGORIES, type Command, type Player, type RoomState } from '../shared/protocol';
-import { emptyScores, RULES_VERSION, scoreDice, totals } from '../shared/rules';
+import {
+  type Command,
+  type CommonPlayer,
+  type RoomBase,
+  type RoomState,
+  type YachtRoomState,
+} from '../shared/protocol';
+import { gameMetadata, type GameType } from '../shared/games';
+import { RULES_VERSION } from '../shared/rules';
+import { GameError, type EngineClock } from './errors';
+import * as yacht from './games/yacht';
+import * as tikatuka from './games/tikatuka';
+import type { TikatukaRoomState } from '../shared/tikatuka';
+export { GameError, type EngineClock } from './errors';
+export { ROLL_SETTLE_MS } from './games/yacht';
 
 export const GRACE_MS = 120_000;
 export const ROOM_IDLE_MS = 24 * 60 * 60 * 1000;
-export const ROLL_SETTLE_MS = 1000;
-export class GameError extends Error {
-  constructor(
-    public code: string,
-    message: string,
-    public status = 409,
-  ) {
-    super(message);
-  }
-}
 export interface Member {
   sessionKey: string;
   connectionId: string | null;
@@ -20,42 +23,70 @@ export interface Member {
   graceRemaining: number;
   departed: boolean;
 }
-export interface StoredRoom {
-  state: RoomState;
+export interface StoredRoom<R extends RoomState = RoomState> {
+  state: R;
   members: Record<string, Member>;
 }
-export interface EngineClock {
-  now: number;
-  uuid: () => string;
-  die: () => number;
-}
-const blankDice = () => Array.from({ length: 5 }, (_, id) => ({ id, value: 1, held: false }));
-const blankPreviews = () =>
-  Object.fromEntries(CATEGORIES.map((key) => [key, 0])) as RoomState['previews'];
-export function newRoom(roomId: string, code: string, now: number, uuid: () => string): StoredRoom {
+export function newRoom(
+  roomId: string,
+  code: string,
+  now: number,
+  uuid: () => string,
+): StoredRoom<YachtRoomState>;
+export function newRoom(
+  roomId: string,
+  code: string,
+  now: number,
+  uuid: () => string,
+  gameType: 'yacht',
+): StoredRoom<YachtRoomState>;
+export function newRoom(
+  roomId: string,
+  code: string,
+  now: number,
+  uuid: () => string,
+  gameType: 'tikatuka',
+): StoredRoom<TikatukaRoomState>;
+export function newRoom(
+  roomId: string,
+  code: string,
+  now: number,
+  uuid: () => string,
+  gameType: GameType,
+): StoredRoom;
+export function newRoom(
+  roomId: string,
+  code: string,
+  now: number,
+  uuid: () => string,
+  gameType: GameType = 'yacht',
+): StoredRoom {
+  const base: RoomBase<GameType, never> = {
+    schemaVersion: 2,
+    protocolVersion: 2,
+    gameType,
+    roomId,
+    code,
+    gameId: uuid(),
+    rulesVersion: gameType === 'yacht' ? RULES_VERSION : 'tikatuka-v1',
+    phase: 'lobby',
+    version: 0,
+    presenceVersion: 0,
+    hostId: '',
+    players: [],
+    turnPlayerId: null,
+    turnId: uuid(),
+    inputAfter: 0,
+    results: [],
+    updatedAt: now,
+    expiresAt: now + ROOM_IDLE_MS,
+  };
   return {
     members: {},
-    state: {
-      roomId,
-      code,
-      gameId: uuid(),
-      rulesVersion: RULES_VERSION,
-      phase: 'lobby',
-      version: 0,
-      presenceVersion: 0,
-      hostId: '',
-      players: [],
-      turnPlayerId: null,
-      turnId: uuid(),
-      round: 1,
-      dice: blankDice(),
-      rolls: 0,
-      inputAfter: 0,
-      previews: blankPreviews(),
-      results: [],
-      updatedAt: now,
-      expiresAt: now + ROOM_IDLE_MS,
-    },
+    state:
+      gameType === 'yacht'
+        ? yacht.createState({ ...base, gameType })
+        : tikatuka.createState({ ...base, gameType }),
   };
 }
 function touch(room: StoredRoom, now: number): void {
@@ -63,10 +94,16 @@ function touch(room: StoredRoom, now: number): void {
   room.state.updatedAt = now;
   room.state.expiresAt = now + ROOM_IDLE_MS;
 }
-export function member(room: StoredRoom, playerId: string, sessionKey: string): Player {
+export function member(room: StoredRoom, playerId: string, sessionKey: string): CommonPlayer {
   const auth = room.members[playerId];
   const player = room.state.players.find((p) => p.id === playerId);
-  if (!auth || auth.sessionKey !== sessionKey || auth.departed || !player)
+  if (
+    !auth ||
+    auth.sessionKey !== sessionKey ||
+    auth.departed ||
+    !player ||
+    player.kind !== 'human'
+  )
     throw new GameError('NOT_MEMBER', '이 방의 참가자가 아닙니다.', 403);
   return player;
 }
@@ -84,10 +121,14 @@ export function joinRoom(
   }
   if (room.state.phase !== 'lobby')
     throw new GameError('GAME_STARTED', '시작된 경기에는 새로 참가할 수 없습니다.');
-  if (room.state.players.length >= 4)
-    throw new GameError('ROOM_FULL', '방에 이미 네 명이 있습니다.');
+  const maximum = gameMetadata(room.state.gameType).maxPlayers;
+  if (room.state.players.length >= maximum)
+    throw new GameError(
+      'ROOM_FULL',
+      maximum === 4 ? '방에 이미 네 명이 있습니다.' : '방에 이미 두 명이 있습니다.',
+    );
   const used = new Set(room.state.players.map((player) => player.seat));
-  const seat = [0, 1, 2, 3].find((value) => !used.has(value))!;
+  const seat = Array.from({ length: maximum }, (_, i) => i).find((value) => !used.has(value))!;
   room.members[playerId] = {
     sessionKey,
     connectionId: null,
@@ -95,107 +136,100 @@ export function joinRoom(
     graceRemaining: GRACE_MS,
     departed: false,
   };
-  room.state.players.push({
+  const base: CommonPlayer = {
     id: playerId,
+    kind: 'human',
     nickname,
     seat,
     ready: false,
     connected: false,
     forfeited: false,
     graceDeadline: now + GRACE_MS,
-    scores: emptyScores(),
-    upper: 0,
-    bonus: 0,
-    total: 0,
-  });
+  };
+  if (room.state.gameType === 'yacht') room.state.players.push(yacht.createPlayer(base));
+  else room.state.players.push(tikatuka.createPlayer(base));
   room.state.players.sort((a, b) => a.seat - b.seat);
   if (!room.state.hostId) room.state.hostId = playerId;
   touch(room, now);
 }
-function resetTurn(room: StoredRoom, playerId: string, uuid: () => string): void {
-  const state = room.state;
-  state.turnPlayerId = playerId;
-  state.turnId = uuid();
-  state.dice = blankDice();
-  state.rolls = 0;
-  state.inputAfter = 0;
-  state.previews = blankPreviews();
-  const player = state.players.find((p) => p.id === playerId)!;
-  state.round = 1 + CATEGORIES.filter((key) => player.scores[key] !== null).length;
-}
-function finishOrAdvance(room: StoredRoom, afterPlayerId: string | null, uuid: () => string): void {
-  const state = room.state;
-  const active = state.players.filter(
-    (player) => !player.forfeited && CATEGORIES.some((key) => player.scores[key] === null),
+/** Computer seats have no session credentials and can never authenticate externally. */
+export function addComputer(room: StoredRoom, now: number, uuid: () => string): void {
+  if (
+    room.state.gameType !== 'tikatuka' ||
+    room.state.phase !== 'lobby' ||
+    room.state.players.length !== 1
+  )
+    throw new GameError('INVALID_COMPUTER_ROOM', '컴퓨터 대전을 만들 수 없습니다.');
+  room.state.players.push(
+    tikatuka.createPlayer({
+      id: uuid(),
+      kind: 'computer',
+      nickname: '컴퓨터',
+      seat: 1,
+      ready: true,
+      connected: true,
+      forfeited: false,
+      graceDeadline: null,
+    }),
   );
-  if (active.length === 0) {
-    state.phase = 'finished';
-    state.turnPlayerId = null;
-    state.inputAfter = 0;
-    const sorted = [...state.players].sort(
-      (a, b) => Number(a.forfeited) - Number(b.forfeited) || b.total - a.total || a.seat - b.seat,
-    );
-    state.results = sorted.map((p, i) => ({
-      playerId: p.id,
-      total: p.total,
-      forfeited: p.forfeited,
-      rank:
-        1 +
-        sorted
-          .slice(0, i)
-          .filter(
-            (other) =>
-              Number(other.forfeited) < Number(p.forfeited) ||
-              (other.forfeited === p.forfeited && other.total > p.total),
-          ).length,
-    }));
-    return;
-  }
-  const oldSeat = state.players.find((p) => p.id === afterPlayerId)?.seat ?? -1;
-  resetTurn(room, (active.find((p) => p.seat > oldSeat) ?? active[0])!.id, uuid);
+  touch(room, now);
 }
 function handoff(room: StoredRoom): void {
-  const remaining = room.state.players.filter((p) => !room.members[p.id]?.departed && !p.forfeited);
+  const remaining = room.state.players.filter(
+    (p) => p.kind === 'human' && !room.members[p.id]?.departed && !p.forfeited,
+  );
   if (!remaining.some((p) => p.id === room.state.hostId))
     room.state.hostId = (remaining.find((p) => p.connected) ?? remaining[0])?.id ?? '';
+}
+function scheduleAI(room: StoredRoom, now: number): void {
+  const state = room.state;
+  if (state.gameType !== 'tikatuka') return;
+  const actor = state.players.find((p) => p.id === tikatuka.actingPlayerId(state));
+  state.aiDueAt =
+    state.phase === 'playing' && actor?.kind === 'computer'
+      ? Math.max(now + 850, state.inputAfter)
+      : null;
 }
 export function depart(room: StoredRoom, playerId: string, now: number, uuid: () => string): void {
   const p = room.state.players.find((player) => player.id === playerId);
   const auth = room.members[playerId];
   if (!p || !auth || auth.departed) return;
-  auth.departed = true;
-  auth.connectionId = null;
-  auth.disconnectedAt = null;
-  p.connected = false;
-  p.graceDeadline = null;
-  if (room.state.phase === 'lobby')
-    room.state.players = room.state.players.filter((player) => player.id !== playerId);
-  else if (room.state.phase === 'playing') {
+  Object.assign(auth, { departed: true, connectionId: null, disconnectedAt: null });
+  Object.assign(p, { connected: false, graceDeadline: null });
+  if (room.state.phase === 'lobby') {
+    if (room.state.gameType === 'yacht')
+      room.state.players = room.state.players.filter((player) => player.id !== playerId);
+    else room.state.players = room.state.players.filter((player) => player.id !== playerId);
+  } else if (room.state.phase === 'playing') {
     p.forfeited = true;
-    if (
-      room.state.phase === 'playing' &&
-      (room.state.turnPlayerId === playerId ||
-        !room.state.players.some(
-          (player) => !player.forfeited && CATEGORIES.some((key) => player.scores[key] === null),
-        ))
-    )
-      finishOrAdvance(room, playerId, uuid);
+    const clock = {
+      now,
+      uuid,
+      die: () => {
+        throw new Error('Forfeit cannot roll dice');
+      },
+    };
+    if (room.state.gameType === 'yacht') yacht.forfeit(room.state, playerId, clock);
+    else tikatuka.forfeit(room.state, playerId, clock);
   }
   handoff(room);
+  scheduleAI(room, now);
   touch(room, now);
   room.state.presenceVersion++;
-  if (!room.state.players.some((player) => !room.members[player.id]?.departed))
+  if (
+    !room.state.players.some(
+      (player) => player.kind === 'human' && !room.members[player.id]?.departed,
+    )
+  )
     room.state.expiresAt = Math.min(room.state.expiresAt, now + GRACE_MS);
 }
-/** Persistent deadlines make duplicate or late alarm delivery idempotent. */
 export function expireGrace(room: StoredRoom, now: number, uuid: () => string): boolean {
   let changed = false;
-  for (const p of [...room.state.players]) {
-    if (!p.connected && p.graceDeadline !== null && p.graceDeadline <= now) {
+  for (const p of [...room.state.players])
+    if (p.kind === 'human' && !p.connected && p.graceDeadline !== null && p.graceDeadline <= now) {
       depart(room, p.id, now, uuid);
       changed = true;
     }
-  }
   return changed;
 }
 export function connect(
@@ -211,10 +245,8 @@ export function connect(
     throw new GameError('GRACE_EXPIRED', '재접속 대기 시간이 끝났습니다.', 403);
   if (auth.disconnectedAt !== null && room.state.phase === 'playing')
     auth.graceRemaining = Math.max(0, auth.graceRemaining - (now - auth.disconnectedAt));
-  auth.connectionId = connectionId;
-  auth.disconnectedAt = null;
-  p.connected = true;
-  p.graceDeadline = null;
+  Object.assign(auth, { connectionId, disconnectedAt: null });
+  Object.assign(p, { connected: true, graceDeadline: null });
   room.state.presenceVersion++;
 }
 export function disconnect(
@@ -233,7 +265,25 @@ export function disconnect(
   room.state.presenceVersion++;
   return true;
 }
-/** Mutates only a transaction-local clone. No transport can inject clock/RNG. */
+export function assertGameCommand(state: RoomState, command: Command): void {
+  if (command.protocolVersion === undefined) {
+    if (state.gameType !== 'yacht' || command.type.startsWith('tika_'))
+      throw new GameError(
+        'PROTOCOL_REFRESH',
+        '경기와 좌석은 유지됩니다. 새로고침 후 계속해 주세요.',
+      );
+  } else if (command.protocolVersion !== 2) {
+    throw new GameError('PROTOCOL_REFRESH', '경기와 좌석은 유지됩니다. 새로고침 후 계속해 주세요.');
+  } else if (command.gameType !== state.gameType) {
+    throw new GameError('WRONG_GAME_TYPE', '이 방에서 사용할 수 없는 게임 동작입니다.');
+  }
+  if (
+    (state.gameType === 'yacht' && command.type.startsWith('tika_')) ||
+    (state.gameType === 'tikatuka' && ['roll', 'hold', 'score'].includes(command.type))
+  )
+    throw new GameError('WRONG_GAME_TYPE', '이 방에서 사용할 수 없는 게임 동작입니다.');
+}
+/** Mutates a transaction-local clone; common authority precedes the game adapter. */
 export function applyCommand(
   room: StoredRoom,
   playerId: string,
@@ -243,6 +293,7 @@ export function applyCommand(
 ): void {
   const p = member(room, playerId, sessionKey);
   const state = room.state;
+  assertGameCommand(state, command);
   if (command.gameId !== state.gameId)
     throw new GameError('GAME_CHANGED', '경기가 바뀌었습니다. 최신 화면을 확인해 주세요.');
   if (command.expectedVersion !== state.version)
@@ -259,26 +310,32 @@ export function applyCommand(
     if (state.phase !== 'lobby') throw new GameError('NOT_LOBBY', '이미 시작된 경기입니다.');
     if (state.hostId !== playerId)
       throw new GameError('HOST_ONLY', '방장만 시작할 수 있습니다.', 403);
+    if (state.players.length < gameMetadata(state.gameType).minPlayers)
+      throw new GameError('NOT_ENOUGH_PLAYERS', '상대가 참가할 때까지 기다려 주세요.');
     if (state.players.some((player) => player.id !== playerId && !player.ready))
       throw new GameError('NOT_READY', '모든 참가자의 준비를 기다려 주세요.');
     if (state.players.some((player) => !player.connected))
       throw new GameError('NOT_CONNECTED', '모든 참가자가 연결될 때까지 기다려 주세요.');
     state.phase = 'playing';
-    for (const player of state.players) room.members[player.id]!.graceRemaining = GRACE_MS;
-    resetTurn(room, state.players[0]!.id, clock.uuid);
+    for (const player of state.players)
+      if (player.kind === 'human') room.members[player.id]!.graceRemaining = GRACE_MS;
+    if (state.gameType === 'yacht') yacht.start(state, clock);
+    else tikatuka.start(state, clock);
   } else if (command.type === 'rematch') {
     if (state.phase !== 'finished')
       throw new GameError('NOT_FINISHED', '경기가 끝난 뒤 다시 시작할 수 있습니다.');
     if (state.hostId !== playerId)
       throw new GameError('HOST_ONLY', '방장만 재경기를 열 수 있습니다.', 403);
-    state.players = state.players.filter((player) => !room.members[player.id]?.departed);
+    if (state.gameType === 'yacht')
+      state.players = state.players.filter((player) => !room.members[player.id]?.departed);
+    else
+      state.players = state.players.filter(
+        (player) => player.kind === 'computer' || !room.members[player.id]?.departed,
+      );
     for (const player of state.players) {
-      player.scores = emptyScores();
-      player.upper = 0;
-      player.bonus = 0;
-      player.total = 0;
       player.forfeited = false;
-      player.ready = false;
+      player.ready = player.kind === 'computer';
+      if (player.kind === 'computer') continue;
       room.members[player.id]!.graceRemaining = GRACE_MS;
       if (!player.connected) {
         room.members[player.id]!.disconnectedAt = clock.now;
@@ -288,43 +345,53 @@ export function applyCommand(
     state.gameId = clock.uuid();
     state.turnId = clock.uuid();
     state.phase = 'lobby';
-    state.round = 1;
-    state.turnPlayerId = null;
-    state.dice = blankDice();
-    state.rolls = 0;
-    state.inputAfter = 0;
-    state.previews = blankPreviews();
-    state.results = [];
+    if (state.gameType === 'yacht') yacht.reset(state);
+    else tikatuka.reset(state);
   } else {
     if (state.phase !== 'playing') throw new GameError('NOT_PLAYING', '진행 중인 경기가 아닙니다.');
-    if (p.forfeited || state.turnPlayerId !== playerId)
+    const actor =
+      state.gameType === 'tikatuka' ? tikatuka.actingPlayerId(state) : state.turnPlayerId;
+    if (p.forfeited || actor !== playerId)
       throw new GameError('NOT_YOUR_TURN', '자신의 차례에 조작할 수 있습니다.', 403);
     if (command.turnId !== state.turnId)
       throw new GameError('TURN_CHANGED', '차례가 바뀌었습니다.');
     if (clock.now < state.inputAfter)
       throw new GameError('INPUT_PENDING', '주사위가 멈출 때까지 잠시 기다려 주세요.');
-    if (command.type === 'hold') {
-      if (state.rolls === 0) throw new GameError('ROLL_FIRST', '먼저 주사위를 굴려 주세요.');
-      state.dice.forEach((die, index) => {
-        die.held = command.held[index]!;
-      });
-    } else if (command.type === 'roll') {
-      if (state.rolls >= 3)
-        throw new GameError('NO_ROLLS', '이번 차례의 굴림을 모두 사용했습니다.');
-      if (state.rolls > 0 && state.dice.every((die) => die.held))
-        throw new GameError('ALL_HELD', '다시 굴릴 주사위를 하나 이상 선택해 주세요.');
-      for (const die of state.dice) if (state.rolls === 0 || !die.held) die.value = clock.die();
-      state.rolls++;
-      state.inputAfter = clock.now + ROLL_SETTLE_MS;
-      state.previews = scoreDice(state.dice.map((die) => die.value));
-    } else {
-      if (state.rolls === 0) throw new GameError('ROLL_FIRST', '먼저 주사위를 굴려 주세요.');
-      if (p.scores[command.category] !== null)
-        throw new GameError('CATEGORY_USED', '이미 기록한 항목입니다.');
-      p.scores[command.category] = scoreDice(state.dice.map((die) => die.value))[command.category];
-      Object.assign(p, totals(p.scores));
-      finishOrAdvance(room, playerId, clock.uuid);
-    }
+    if (
+      state.gameType === 'yacht' &&
+      (command.type === 'roll' || command.type === 'hold' || command.type === 'score')
+    )
+      yacht.applyIntent(state, playerId, command, clock);
+    else if (
+      state.gameType === 'tikatuka' &&
+      command.type !== 'roll' &&
+      command.type !== 'hold' &&
+      command.type !== 'score'
+    )
+      tikatuka.applyIntent(state, playerId, command, clock);
+    else throw new GameError('WRONG_GAME_TYPE', '이 방에서 사용할 수 없는 게임 동작입니다.');
   }
+  scheduleAI(room, clock.now);
   touch(room, clock.now);
+}
+/** Called only inside RoomStore's synchronous alarm transaction. */
+export function applyComputerTurn(room: StoredRoom, clock: EngineClock): boolean {
+  const state = room.state;
+  if (
+    state.gameType !== 'tikatuka' ||
+    state.phase !== 'playing' ||
+    state.aiDueAt === null ||
+    state.aiDueAt > clock.now ||
+    state.inputAfter > clock.now
+  )
+    return false;
+  const actor = state.players.find((p) => p.id === tikatuka.actingPlayerId(state));
+  if (!actor || actor.kind !== 'computer' || actor.forfeited) return false;
+  // Selection receives only the already-public state, never the RNG or clock.
+  const intent = tikatuka.chooseAI(state);
+  if (!intent) throw new GameError('AI_NO_ACTION', '컴퓨터의 차례를 처리하지 못했습니다.', 503);
+  tikatuka.applyIntent(state, actor.id, intent, clock);
+  scheduleAI(room, clock.now);
+  touch(room, clock.now);
+  return true;
 }

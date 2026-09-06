@@ -1,10 +1,15 @@
 import { expect, type Page, type Browser, type BrowserContext } from '@playwright/test';
-import type { RoomState } from '../../src/shared/protocol';
+import type { YachtRoomState as RoomState } from '../../src/shared/protocol';
 export async function roomState(page: Page, code: string): Promise<RoomState> {
   return page.evaluate(async (code) => {
-    const r = await fetch(`/api/rooms/${code}`, { cache: 'no-store' });
+    const r = await fetch(`/api/rooms/${code}`, {
+      cache: 'no-store',
+      headers: { 'X-Game-Protocol': '2' },
+    });
     if (!r.ok) throw new Error(`snapshot ${r.status}`);
-    return ((await r.json()) as { state: RoomState }).state;
+    const state = ((await r.json()) as { state: RoomState }).state;
+    if (state.gameType !== 'yacht') throw new Error('Expected a Yacht room');
+    return state;
   }, code);
 }
 export async function getCode(page: Page) {

@@ -1,6 +1,14 @@
 import type { Command, ServerMessage } from '../shared/protocol';
-import { applyCommand, GameError, member, type EngineClock, type StoredRoom } from './engine';
+import {
+  applyCommand,
+  applyComputerTurn,
+  GameError,
+  member,
+  type EngineClock,
+  type StoredRoom,
+} from './engine';
 import { canonicalCommand } from './validation';
+import { migratePublicState, migrateStoredRoom } from './migration';
 
 export interface SqlAdapter {
   exec(
@@ -24,7 +32,18 @@ export class RoomStore {
   }
   load(): StoredRoom | null {
     const row = this.storage.sql.exec('SELECT data FROM room WHERE singleton=1').toArray()[0];
-    return row ? (JSON.parse(row.data as string) as StoredRoom) : null;
+    if (!row) return null;
+    let value: unknown;
+    try {
+      value = JSON.parse(row.data as string) as unknown;
+    } catch {
+      throw new GameError(
+        'STORED_STATE_INVALID',
+        '저장된 경기 형식을 확인할 수 없습니다. 경기 데이터는 보존되어 있습니다.',
+        503,
+      );
+    }
+    return migrateStoredRoom(value);
   }
   save(room: StoredRoom): void {
     this.storage.sql.exec(
@@ -83,7 +102,9 @@ export class RoomStore {
       if (previous) {
         if (previous.payload !== payload)
           throw new GameError('REQUEST_ID_REUSED', '요청 번호가 다른 동작에 사용되었습니다.', 409);
-        return JSON.parse(previous.response as string) as ServerMessage;
+        const response = JSON.parse(previous.response as string) as ServerMessage;
+        if (response.state) response.state = migratePublicState(response.state);
+        return response;
       }
       member(room, playerId, sessionKey);
       this.rate(`command:${playerId}`, clock.now, 60, 10_000);
@@ -112,6 +133,47 @@ export class RoomStore {
         clock.now,
       );
       return response;
+    });
+  }
+  /** Durable one-step AI dispatch: state, generated faces and receipt share one commit. */
+  processComputer(clock: EngineClock): boolean {
+    return this.transaction(() => {
+      const room = this.load();
+      if (!room || room.state.gameType !== 'tikatuka') return false;
+      const before = room.state;
+      const requestId = `ai-${before.turnId}-${before.version}`;
+      const gameId = before.gameId;
+      const playerId = before.players.find((p) => p.kind === 'computer')?.id;
+      if (!playerId) return false;
+      const payload = JSON.stringify({
+        type: 'server_ai',
+        version: before.version,
+        turnId: before.turnId,
+      });
+      if (
+        this.storage.sql
+          .exec(
+            'SELECT 1 AS processed FROM requests WHERE player_id=? AND game_id=? AND request_id=?',
+            playerId,
+            gameId,
+            requestId,
+          )
+          .toArray().length
+      )
+        return false;
+      if (!applyComputerTurn(room, clock)) return false;
+      const response: ServerMessage = { type: 'result', requestId, state: room.state };
+      this.save(room);
+      this.storage.sql.exec(
+        'INSERT INTO requests(player_id,game_id,request_id,payload,response,created_at) VALUES(?,?,?,?,?,?)',
+        playerId,
+        gameId,
+        requestId,
+        payload,
+        JSON.stringify(response),
+        clock.now,
+      );
+      return true;
     });
   }
   cleanup(now: number): void {

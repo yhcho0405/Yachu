@@ -2,7 +2,11 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { Command, Intent } from '../src/shared/protocol';
+import type {
+  LegacyYachtCommand as Command,
+  YachtIntent as Intent,
+  YachtRoomState,
+} from '../src/shared/protocol';
 import { connect, joinRoom, newRoom } from '../src/server/engine';
 import { RoomStore, type StorageAdapter } from '../src/server/store';
 
@@ -58,6 +62,11 @@ function setup(filename = ':memory:') {
     connect(room, 'player-0', 'session-0', 'connection-0', 1_000_000);
     store.save(room);
   }
+  const read = () => {
+    const room = store.load();
+    if (room && room.state.gameType !== 'yacht') throw new Error('Expected a Yacht room');
+    return room as { state: YachtRoomState; members: NonNullable<typeof room>['members'] } | null;
+  };
   const command = (intent: Intent): Command => {
     const state = store.load()!.state;
     return {
@@ -68,9 +77,12 @@ function setup(filename = ':memory:') {
       expectedVersion: state.version,
     };
   };
-  const send = (cmd: Command, now = 1_100_000, die = () => 1) =>
-    store.process('player-0', 'session-0', cmd, { now, uuid, die });
-  return { db, adapter, store, command, send };
+  const send = (cmd: Command, now = 1_100_000, die = () => 1) => {
+    const result = store.process('player-0', 'session-0', cmd, { now, uuid, die });
+    if (result.state?.gameType !== 'yacht') throw new Error('Expected a Yacht result');
+    return { ...result, state: result.state };
+  };
+  return { db, adapter, store, command, send, read };
 }
 describe('SQLite transaction and request receipts', () => {
   it('returns original roll on retry before stale version checks, without calling RNG twice', () => {
@@ -87,7 +99,7 @@ describe('SQLite transaction and request receipts', () => {
     });
     expect(retry).toEqual(first);
     expect(calls).toBe(5);
-    expect(t.store.load()!.state.rolls).toBe(1);
+    expect(t.read()!.state.rolls).toBe(1);
     expect(() => t.send({ ...cmd, type: 'score', category: 'yacht' }, 1_202_000)).toThrow(
       '요청 번호',
     );
@@ -96,11 +108,11 @@ describe('SQLite transaction and request receipts', () => {
   it('rolls back state, versions, rate rows and receipts together on storage failure', () => {
     const t = setup();
     t.send(t.command({ type: 'start' }));
-    const before = t.store.load();
+    const before = t.read();
     const cmd = t.command({ type: 'roll' });
     t.adapter.failReceipts = true;
     expect(() => t.send(cmd, 1_200_000, () => 6)).toThrow('disk failure');
-    expect(t.store.load()).toEqual(before);
+    expect(t.read()).toEqual(before);
     t.adapter.failReceipts = false;
     const result = t.send(cmd, 1_202_000, () => 3);
     expect(result.state!.dice.map((die) => die.value)).toEqual([3, 3, 3, 3, 3]);
@@ -117,7 +129,7 @@ describe('SQLite transaction and request receipts', () => {
     const result = first.send(cmd, 1_200_000, () => 4);
     first.db.close();
     const restored = setup(filename);
-    expect(restored.store.load()!.state).toEqual(result.state);
+    expect(restored.read()!.state).toEqual(result.state);
     expect(
       restored.send(cmd, 1_204_000, () => {
         throw new Error('must not regenerate');
@@ -142,15 +154,15 @@ describe('SQLite transaction and request receipts', () => {
       Promise.resolve().then(() => t.send(roll, 1_102_000)),
     ]);
     expect(racing.map((value) => value.status)).toEqual(['fulfilled', 'rejected']);
-    expect(t.store.load()!.state.rolls).toBe(1);
+    expect(t.read()!.state.rolls).toBe(1);
     const score = t.command({ type: 'score', category: 'yacht' });
     const duplicates = await Promise.all([
       Promise.resolve().then(() => t.send(score, 1_104_000)),
       Promise.resolve().then(() => t.send(score, 1_104_000)),
     ]);
     expect(duplicates[0]).toEqual(duplicates[1]);
-    expect(t.store.load()!.state.players[0]!.scores.yacht).toBe(50);
-    expect(t.store.load()!.state.rolls).toBe(0);
+    expect(t.read()!.state.players[0]!.scores.yacht).toBe(50);
+    expect(t.read()!.state.rolls).toBe(0);
   });
   it('retains receipts for a departed identity but local revocation overrides every receipt', () => {
     const t = setup();

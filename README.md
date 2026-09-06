@@ -1,10 +1,17 @@
-# 다이스 아틀리에 · Dice Atelier
+# ATELIER · 아틀리에
 
-가입 없이 친구와 즐기는 1–4인 온라인 야추. Three.js로 만든 주사위와 테이블, 한국어 점수판, 저장되는 경기와 재접속을 제공합니다.
+가입 없이 닉네임으로 시작하는 온라인 보드게임. 같은 사이트에서 야추와 티카투카를 선택하고, 혼자 플레이하거나 초대 링크로 친구와 대전합니다. Three.js 보드, 서버가 확정하는 규칙과 주사위, 저장되는 경기와 재접속을 제공합니다.
+
+| 게임     | 혼자 시작          | 온라인 방     |
+| -------- | ------------------ | ------------- |
+| 야추     | 기존 1인 플레이    | 2–4인 대전    |
+| 티카투카 | 서버 컴퓨터와 1대1 | 사람끼리 1대1 |
+
+**티카투카는 원작 대조 중입니다.** 배점·알까기·실드와 재굴림 선택을 원작 화면과 대조했으나, 선언의 조건·승패 영향 등은 아직 확정하지 못했습니다. 선언은 임의 규칙으로 대체하지 않았습니다. 구현된 범위와 미확정 사항은 [규칙 문서](docs/tikatuka-rules.md)와 [출처 대조표](docs/tikatuka-rules-research.md)에 구분합니다. 현재 상태를 원작 재현 완료로 표시하지 않습니다.
 
 ## 로컬 실행
 
-Node.js 24 이상과 npm을 설치한 뒤:
+Node.js 24.14 이상과 npm을 설치한 뒤:
 
 ```sh
 npm ci
@@ -12,42 +19,45 @@ npx playwright install chromium firefox
 npm run dev
 ```
 
-http://127.0.0.1:8787 에서 플레이합니다. `dev` 한 명령은 클라이언트를 빌드하고 **실제 Wrangler/workerd의 Workers와 SQLite Durable Objects**를 함께 실행합니다. 코드 수정 후 명령을 다시 실행하면 클라이언트도 갱신됩니다. Worker 수정은 Wrangler가 감지합니다. 개발 전용 `.dev.vars`는 최초 실행 시 암호학적 난수로 생성되며 Git에서 제외됩니다. 운영 Secret은 로컬 실행에 필요하지 않습니다.
+http://127.0.0.1:8787 에서 플레이합니다. `dev`는 클라이언트를 빌드하고 실제 Wrangler/workerd의 Worker와 SQLite Durable Objects를 실행합니다. 클라이언트 수정 후 다시 실행하면 빌드가 갱신되고, Worker 수정은 Wrangler가 감지합니다. 개발용 `.dev.vars`는 최초 실행 시 난수로 생성되며 Git에서 제외됩니다. 운영 Secret은 로컬 실행에 필요하지 않습니다.
 
 ## 검사
 
 ```sh
-npm run check             # TypeScript + ESLint + 규칙/상태/SQLite 단위 검사
-npm run build             # 동일 커밋 번호의 클라이언트와 /version.json
-npm run build:worker      # Wrangler 실제 Worker 번들 확인, 업로드 없음
-npm run test:e2e          # 로컬 Wrangler + 독립 브라우저 실제 게임
-npm run test:persistence  # 실제 workerd 중지/재시작 후 복구
+npm run check             # TypeScript + ESLint + 규칙/상태/SQLite + 요청 큐
+npm run build             # 클라이언트와 /version.json에 동일 커밋 기록
+npm run build:worker      # 실제 Worker 번들 확인, 업로드 없음
+npm run test:e2e          # 실제 workerd에서 독립 브라우저 전체 경기
+npm run test:persistence  # 야추·티카투카 실제 프로세스 중지/재시작
 ```
 
-브라우저 테스트는 Chromium의 독립 쿠키 컨텍스트로 1/2/3/4인 전체 경기와 재경기를 실행하고, Firefox에서도 360px 화면과 게임 조작을 확인합니다. `PLAYWRIGHT_BASE_URL`을 배포 URL로 지정하면 동일한 정상 사용자 흐름을 실서비스에서 검증합니다. `EXPECTED_COMMIT`으로 서버와 정적 클라이언트의 배포 커밋을 확인합니다. 테스트에는 운영 인증 우회/강제 주사위 API가 없습니다. 테스트 보고서에 인증 쿠키가 남지 않도록 trace와 HAR를 기록하지 않습니다.
+기존 야추 1/2/3/4인 전체 경기·재경기와 Firefox 모바일 검사를 유지합니다. 티카투카는 두 독립 세션 및 컴퓨터 상대 전체 경기·재경기, 재굴림 후보 재접속을 검사합니다. 카탈로그 검사는 두 게임의 동시 방 격리, 같은 브라우저에서 게임 전환, 설정 유지, 장면·오디오 정리와 360px/태블릿/데스크톱을 포함합니다.
 
-## 구성
+`PLAYWRIGHT_BASE_URL`을 배포 URL로 지정하면 같은 정상 사용자 흐름을 실서비스에서 검증합니다. `EXPECTED_COMMIT`은 서버와 정적 클라이언트의 배포 커밋을 확인합니다. 부정 요청·권한 거절 검사는 로컬에서만 실행합니다. 운영 인증 우회나 강제 주사위 API는 없으며 인증 쿠키가 남지 않도록 trace/HAR를 기록하지 않습니다. 수행한 결과와 제한은 [검증 기록](docs/verification.md)에 별도로 남깁니다.
 
-- `src/client`: React HTML UI, 순차 요청 큐와 복구, Three.js 장면, Web Audio.
-- `src/shared`: 12개 규칙 항목, 스냅샷/명령 타입, 주사위 방향 수학.
-- `src/server`: Worker 라우팅, 세션 Registry, 방별 GameRoom, SQLite 원자 저장, 권위 게임 엔진.
-- `wrangler.jsonc`: 인프라 설정의 유일한 원본. Worker `dice-atelier`, Static Assets, `GameRoom`/`SessionRegistry` SQLite 마이그레이션.
-- `.github/workflows/deploy.yml`: PR 검사와 main 검증/자동 배포/실서비스 브라우저 검사.
+## 구조
 
-클라이언트·API·WebSocket은 같은 `workers.dev` 출처입니다. 상대 경로와 현재 출처에서 계산한 WebSocket URL을 사용합니다. Pages, 외부 DB, D1, KV, 제3자 쿠키는 사용하지 않습니다.
+- `src/shared/games.ts`: 안정적인 게임 ID, 설명, 인원과 혼자 플레이 방식의 공통 원본.
+- `src/client`: 공통 카탈로그·닉네임·로비·설정·연결과 요청 큐. `games/`의 화면·도움말·장면·음향은 게임별로 분리하고 필요할 때 로드합니다.
+- `src/shared/protocol.ts`: 공통 메시지와 `gameType`으로 좁혀지는 상태·명령. 야추 규칙은 `rules.ts`, 티카투카 규칙 타입·미리보기는 `tikatuka.ts`에 있습니다.
+- `src/server`: 공통 인증·방·저장·연결을 공유하고 `games/`의 순수 게임 모듈로 상태를 전이합니다. `migration.ts`는 실제 기존 야추 형식만 안전하게 이전합니다.
+- `wrangler.jsonc`: 인프라 설정의 유일한 원본. 기존 Worker `dice-atelier`, `GameRoom`/`SessionRegistry`, 바인딩과 SQLite 초기 마이그레이션을 유지합니다.
+- `.github/workflows/deploy.yml`: PR 검사, main 자동 배포와 배포 후 두 게임의 정상 브라우저 검사.
 
-## 게임
+공통 표시명은 아틀리에이며 배포 주소, 기존 세션·설정 키와 Durable Object 네임스페이스는 바꾸지 않습니다. 게임 카드를 둘러보는 동작은 기권이 아니며, 다른 게임을 시작하려면 현재 방에서 명시적으로 나갑니다. 초대 참가 시 게임 종류는 서버의 방 상태가 결정합니다. 추가 게임의 등록 경계와 호환성은 [멀티게임 구조](docs/multigame.md)를 참고하세요.
 
-각 턴에 다섯 주사위를 최대 3번 굴립니다. 1–5 키 또는 주사위/숫자 버튼으로 보관합니다. 사용하지 않은 항목을 선택한 뒤 점수를 확정합니다. 0점은 별도 확인이 필요합니다. 에이스~식스 합이 63이면 보너스35; 풀하우스는 같은 눈5개도 인정; 스몰15·라지30·야추50. 12개 항목을 마치면 순위를 표시하며 동점은 공동 순위입니다. 이 규칙의 최고점은325입니다.
+## 게임과 재접속
 
-3~4인과 재접속 정책은 이 프로젝트의 확장입니다. 임의의 턴 제한은 없습니다. 경기 중 연결이 끊긴 시간은 **한 경기 전체에서 누적120초**까지 허용하고 재접속으로 초기화하지 않습니다. 명시적인 퇴장은 즉시 기권이며 로비 방장은 남은 참가자에게 위임합니다. 로비 연결 끊김은120초 대기 후 자리에서 나갑니다. 모든 참가자가 나간 방은 짧은 정리 유예 뒤 삭제됩니다. 자세한 수명과 복구 정책은 [서버 문서](docs/server.md)를 참고하세요.
+야추는 기존 12개 항목 규칙을 유지합니다. 각 턴 주사위 다섯 개를 최대 세 번 굴리고, 1–5 키나 주사위 버튼으로 보관하며 항목 선택 후 점수를 확정합니다. 0점은 별도 확인합니다. 상단 63점 이상 보너스35, 스몰15·라지30·야추50이며 같은 눈 다섯 개도 풀하우스입니다. 최고점은325, 동점은 공동 순위입니다.
+
+티카투카는 대응하는 세 라인의 승수가 먼저이고, 승수가 같을 때 총점을 비교합니다. 같은 눈 두 개는3배, 세 개는5배입니다. 일반 주사위의 알까기, 보호되는 실드, 공격 후 보너스 배치, 재굴림 후보 선택과 홀드를 서버에 저장합니다. 세부 범위와 원작 확인 수준은 [티카투카 규칙](docs/tikatuka-rules.md)을 따릅니다.
+
+진행 중 연결 끊김은 한 경기 전체에서 누적120초까지 허용하고 재접속으로 초기화하지 않습니다. 명시적 퇴장은 즉시 기권입니다. 로비 방장은 남은 사람에게 위임하고, 모든 사람이 나간 방은 짧은 유예 뒤 정리합니다. 컴퓨터 좌석은 외부 인증 자격을 갖지 않으며 저장된 Alarm으로 한 단계씩 진행합니다. 자세한 정책은 [서버 문서](docs/server.md)에 있습니다.
 
 ## 배포
 
-`main` push가 유일한 운영 배포 경로입니다. 등록된 GitHub Actions Secrets `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `SESSION_SECRET`을 배포 단계에만 전달합니다. PR 코드에는 운영 비밀을 제공하지 않습니다.
+`main` push가 유일한 운영 배포 경로입니다. 기존 GitHub Actions Secrets `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `SESSION_SECRET`을 배포 단계에만 전달합니다. PR 코드에는 운영 비밀을 제공하지 않습니다.
 
-Wrangler `--secrets-file`의 공식 동시 업로드 기능으로 Worker 코드와 `SESSION_SECRET` 런타임 비밀을 한 번에 배포합니다. 비밀 파일은 OS 임시 디렉터리에0600 권한으로 만들고 즉시 삭제합니다. 값은 소스/vars/VITE 변수/아티팩트에 들어가지 않습니다. 서버는 Secret이 없거나32자보다 짧으면 인증을 생략하지 않고503을 반환합니다.
+Wrangler `--secrets-file`로 코드와 같은 `SESSION_SECRET`을 함께 배포합니다. 임시 파일은0600 권한으로 만들고 즉시 삭제하며 값은 소스·vars·VITE 변수·아티팩트에 넣지 않습니다. Secret이 없거나32바이트 미만이면 서버는503으로 거절합니다. 검사 실패 시 배포하지 않고 배포 후 검사 실패도 Actions 실패로 기록합니다. main 실행은 직렬화하고 배포 직전에 최신 SHA를 확인합니다.
 
-검사에 실패하면 배포하지 않으며, 배포 후 브라우저 검사가 실패하면 Actions도 실패합니다. main 작업은 직렬화하고 배포 직전에 최신main SHA를 확인합니다. 검사한 체크아웃 그대로 배포합니다. 계정의 Cloudflare Git 연동을 추가로 켜지 마세요.
-
-자세한 운영/복구는 [배포 문서](docs/deployment.md), 실제 수행 결과는 [검증 기록](docs/verification.md), 원작 관찰은 [참고 자료](docs/references.md), 직접 제작 자산과 라이선스는 [자산 문서](docs/assets.md)를 참고하세요.
+모든 자산·API·WebSocket은 같은 Workers 출처입니다. Pages, D1, KV, 외부 DB나 별도 서버를 추가하지 않습니다. [배포·호환 복구](docs/deployment.md), [야추 참고](docs/references.md), [티카투카 화면 관찰](docs/tikatuka-references.md), [직접 제작 자산](docs/assets.md)을 참고하세요.
