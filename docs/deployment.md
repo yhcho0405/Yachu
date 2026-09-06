@@ -5,7 +5,7 @@
 GitHub Actions의 main push만 사용한다. 등록된 세 Secrets의 값을 로컬에서 조회할 필요가 없다. Actions는 고정 SHA의 공식checkout/setup-node/upload-artifact를 사용하며 contents:read만 요청한다. 운영 배포 실행은 충돌하지 않게 직렬화하고, 배포 직전에main 최신 SHA와 현재SHA를 비교한다. 더 오래된 커밋이면 배포 전에 실패한다.
 
 1. npm ci → 타입/정적/단위 검사.
-2. 실제 Wrangler 로컬 서버에서 Chromium 1~4인 전 경기 및 Firefox UI 검사.
+2. 같은 `wrangler.jsonc`에서 파생한 실제 workerd 로컬 서버에서 Chromium 1~4인 전 경기 및 Firefox UI 검사.
 3. 실제 workerd 재시작 후 세션/턴/주사위/중복처리 복구 검사.
 4. 빌드한 클라이언트와 Worker에 같은Git SHA를 넣는다. 이 검사된 코드를 wrangler deploy로 올린다.
 5. --secrets-file로 SESSION_SECRET을 같은 업로드의 런타임비밀로 전달한다. 파일을 출력하지 않으며 임시파일은 finally에서 삭제한다.
@@ -13,6 +13,8 @@ GitHub Actions의 main push만 사용한다. 등록된 세 Secrets의 값을 로
 7. Actions요약에 URL/SHA/상태를 기록하고 쿠키 없는 스크린샷과 보고서를7일 보관한다.
 
 CLOUDFLARE_API_TOKEN과 계정ID는 Worker 런타임으로 전달하지 않는다. SESSION_SECRET은 배포마다 바꾸지 않는다. 기존 비밀과 Durable Object 바인딩/마이그레이션을 보존한다. 실제값 없는 예시는 루트.env.example에만 둔다.
+
+일반 개발 명령 `npm run dev`는 Wrangler CLI를 사용한다. CI 브라우저 서버 `npm run dev:ci`는 이미 빌드한 클라이언트와 Wrangler dry-run Worker 번들을 읽는다. 루트 Wrangler 설정을 공식 SDK 도우미로 변환하고, 잠금 파일에 고정된 Wrangler 자신의 Miniflare/workerd를 실행한다. 정적 자산 라우팅·헤더, API, WebSocket, SQLite Durable Objects는 모두 실제 workerd 안에서 처리한다. 별도 Node.js 게임 서버나 독립 인프라 설정은 없다. Wrangler 개발 프록시의 CI 종료 문제를 피하기 위한 실행 방식이며 [경위와 검증 기록](verification.md#ci-실행-중-확인한-문제)을 남겼다.
 
 ## 비용과 한도
 

@@ -1,7 +1,19 @@
-import { appendFileSync, readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { appendFileSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { basename } from 'node:path';
 import { freemem, totalmem } from 'node:os';
+import { stripVTControlCharacters } from 'node:util';
+
+const errorClasses = new Set([
+  'Error',
+  'TypeError',
+  'RangeError',
+  'ReferenceError',
+  'SyntaxError',
+  'URIError',
+  'EvalError',
+  'AggregateError',
+]);
 
 function optionalRead(path) {
   try {
@@ -16,15 +28,29 @@ export function safeStack(raw) {
   return raw
     .split('\n')
     .flatMap((line) => {
-      const value = line.trim();
-      if (/^at [A-Za-z0-9_.<>[\] /\\():-]+$/.test(value))
-        return [value.replace(/[A-Za-z0-9_-]{32,}/g, '[opaque]')];
+      const value = stripVTControlCharacters(line)
+        .trim()
+        .replace(/^\[[A-Za-z0-9_: -]{1,48}\]\s*/, '');
+      if (value.startsWith('at ')) {
+        // Never trust arbitrary function names or paths as diagnostics: an
+        // exception can contain user input. Retain only known runtime source
+        // basenames and numeric locations, with no caller or directory text.
+        const frame = value.match(
+          /\b((?:cli|index|worker|entry|core|runtime|proxy-worker|ci-server|dev|local-diagnostics)\.(?:[cm]?js|ts)):(\d+):(\d+)\)?$/,
+        );
+        if (frame) return [`at ${frame[1]}:${frame[2]}:${frame[3]}`];
+        const internal = value.match(/\bnode:internal\/[^\s()]+:(\d+):(\d+)\)?$/);
+        return internal ? [`at node-internal:${internal[1]}:${internal[2]}`] : [];
+      }
       const error = value.match(/^([A-Za-z]*Error)(?::|\s|$)/)?.[1];
       const codes =
         value.match(
           /\b(?:ECONNRESET|ECONNREFUSED|ETIMEDOUT|EPIPE|ENOMEM|ENOSPC|EADDRINUSE|SIGKILL|SIGSEGV|SIGABRT|ERR_[A-Z_]+)\b/g,
         ) ?? [];
-      return [...(error ? [error] : []), ...codes];
+      return [
+        ...(error ? [errorClasses.has(error) ? error : 'Error'] : []),
+        ...codes.map((code) => (code.startsWith('ERR_') ? 'ERR_REDACTED' : code)),
+      ];
     })
     .slice(-100)
     .join('\n');
@@ -32,9 +58,9 @@ export function safeStack(raw) {
 export function startLocalDiagnostics() {
   mkdirSync('work', { recursive: true });
   const output = 'work/local-diagnostics.jsonl';
-  const rawLog = 'work/local-wrangler-raw.log';
+  const pending = { stdout: '', stderr: '' };
+  let frames = [];
   writeFileSync(output, '');
-  writeFileSync(rawLog, '', { mode: 0o600 });
   const sample = (event = 'sample', detail = {}) => {
     let processes = [];
     try {
@@ -68,18 +94,23 @@ export function startLocalDiagnostics() {
   const timer = setInterval(sample, 30000);
   timer.unref();
   return {
-    rawLog,
+    consume(channel, chunk) {
+      pending[channel] += chunk.toString();
+      const lines = pending[channel].split('\n');
+      pending[channel] = lines.pop().slice(-8192);
+      const safe = safeStack(lines.join('\n'));
+      if (safe) frames = [...frames, ...safe.split('\n')].slice(-100);
+    },
     finish(code, signal) {
       clearInterval(timer);
       sample('wrangler-exit', { code, signal });
-      if (existsSync(rawLog)) {
-        const stack = safeStack(readFileSync(rawLog, 'utf8'));
-        writeFileSync('work/local-runtime-stack.txt', stack + '\n');
-        if (code !== 0 && signal !== 'SIGTERM' && signal !== 'SIGINT')
-          console.error(
-            `Local Wrangler exited (code=${code}, signal=${signal ?? 'none'}). Sanitized stack:\n${stack}`,
-          );
-      }
+      const tail = safeStack(Object.values(pending).join('\n'));
+      const stack = [...frames, ...(tail ? tail.split('\n') : [])].slice(-100).join('\n');
+      writeFileSync('work/local-runtime-stack.txt', stack + '\n');
+      if (code !== 0 && signal !== 'SIGTERM' && signal !== 'SIGINT')
+        console.error(
+          `Local Wrangler exited (code=${code}, signal=${signal ?? 'none'}). Sanitized stack:\n${stack}`,
+        );
     },
   };
 }

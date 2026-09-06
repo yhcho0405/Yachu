@@ -5,16 +5,38 @@ import { startLocalDiagnostics } from './local-diagnostics.mjs';
 ensureLocalSecret();
 execFileSync('npm', ['run', 'build'], { stdio: 'inherit' });
 const diagnostic = process.env.CI ? startLocalDiagnostics() : undefined;
-const child = spawn('npx', ['wrangler', 'dev', '--local', '--ip', '127.0.0.1', '--port', '8787'], {
-  stdio: 'inherit',
-  env: {
-    ...process.env,
-    WRANGLER_SEND_METRICS: 'false',
-    ...(diagnostic ? { WRANGLER_LOG_PATH: diagnostic.rawLog } : {}),
+const child = spawn(
+  'npx',
+  [
+    'wrangler',
+    'dev',
+    '--local',
+    '--ip',
+    '127.0.0.1',
+    '--port',
+    '8787',
+    ...(diagnostic ? ['--log-level', 'debug'] : []),
+  ],
+  {
+    stdio: diagnostic ? ['ignore', 'pipe', 'pipe'] : 'inherit',
+    env: {
+      ...process.env,
+      WRANGLER_SEND_METRICS: 'false',
+      ...(diagnostic ? { WRANGLER_WRITE_LOGS: 'false' } : {}),
+    },
   },
-});
-for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => child.kill(signal));
-child.on('exit', (code, signal) => {
-  diagnostic?.finish(code, signal);
+);
+let shutdownSignal;
+if (diagnostic) {
+  child.stdout.on('data', (chunk) => diagnostic.consume('stdout', chunk));
+  child.stderr.on('data', (chunk) => diagnostic.consume('stderr', chunk));
+}
+for (const signal of ['SIGINT', 'SIGTERM'])
+  process.on(signal, () => {
+    shutdownSignal = signal;
+    child.kill(signal);
+  });
+child.on('close', (code, signal) => {
+  diagnostic?.finish(code, signal ?? shutdownSignal);
   process.exit(code ?? 1);
 });

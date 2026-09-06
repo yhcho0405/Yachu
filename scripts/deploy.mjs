@@ -18,7 +18,11 @@ try {
   writeFileSync(path, JSON.stringify({ SESSION_SECRET }), { mode: 0o600 });
   const result = spawnSync('npx', ['wrangler', 'deploy', '--secrets-file', path], {
     encoding: 'utf8',
-    env: { ...process.env, WRANGLER_SEND_METRICS: 'false' },
+    env: {
+      ...process.env,
+      WRANGLER_SEND_METRICS: 'false',
+      WRANGLER_WRITE_LOGS: 'false',
+    },
     maxBuffer: 10 * 1024 * 1024,
   });
   let output = (result.stdout ?? '') + (result.stderr ?? '');
